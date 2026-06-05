@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>魔方比赛成绩管理系统 v3</title>
+    
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Tabulator for tables -->
+    <link href="https://unpkg.com/tabulator-tables@5.6.0/dist/css/tabulator_materialize.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/tabulator-tables@5.6.0/dist/js/tabulator.min.js"></script>
+    
+    <!-- Chart.js for Gamma distribution chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 2em; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
+        
+        .config-bar {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .config-bar input {
+            flex: 1;
+            min-width: 300px;
+            padding: 12px 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .config-bar button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .config-bar button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .config-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .tab {
+            flex: 1;
+            padding: 18px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        .tab:hover { background: #e9ecef; color: #495057; }
+        .tab.active { color: #667eea; border-bottom-color: #667eea; background: white; }
+        
+        .content { padding: 30px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .btn-success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .btn-danger { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        
+        #table-container { margin-top: 20px; }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 30px 0;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .stat-card h3 { font-size: 0.9em; opacity: 0.9; margin-bottom: 8px; }
+        .stat-card .value { font-size: 2em; font-weight: bold; }
+        
+        .smart-fields { background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .non-smart-fields { background: #fff3e0; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        
+        .loading { text-align: center; padding: 40px; color: #6c757d; }
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 30px; height: 30px;
+            border: 3px solid #dee2e6;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎲 魔方比赛成绩管理系统 v3</h1>
+            <p>项目管理 · Gamma MLE 预测 · 高度可自定义统计</p>
+        </div>
+        
+        <div class="config-bar">
+            <input type="text" id="supabaseUrl" placeholder="Supabase URL" />
+            <input type="text" id="supabaseKey" placeholder="Anon Key" />
+            <button onclick="connectDB()">🔗 连接数据库</button>
+            <button onclick="loadAllData()">🔄 刷新数据</button>
+        </div>
+        
+        <div id="alertBox"></div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('competitions')">🏆 比赛管理</div>
+            <div class="tab" onclick="switchTab('events')">🎯 项目管理</div>
+            <div class="tab" onclick="switchTab('participants')">👤 选手管理</div>
+            <div class="tab" onclick="switchTab('attempts')">📝 成绩录入</div>
+            <div class="tab" onclick="switchTab('view')">📊 查看数据</div>
+            <div class="tab" onclick="switchTab('stats')">📈 统计分析</div>
+        </div>
+        
+        <div class="content">
+            <!-- 比赛管理 -->
+            <div id="tab-competitions" class="tab-content active">
+                <h2>🏆 比赛管理</h2>
+                <div class="grid">
+                    <div>
+                        <h3>添加比赛</h3>
+                        <div class="form-group">
+                            <label>比赛编号</label>
+                            <input type="number" id="comp-number" placeholder="如：1" />
+                        </div>
+                        <div class="form-group">
+                            <label>比赛名称</label>
+                            <input type="text" id="comp-name" placeholder="如：2026春季赛" />
+                        </div>
+                        <div class="form-group">
+                            <label>比赛日期</label>
+                            <input type="date" id="comp-date" />
+                        </div>
+                        <div class="form-group">
+                            <label>地点</label>
+                            <input type="text" id="comp-location" placeholder="如：北京" />
+                        </div>
+                        <div class="form-group">
+                            <label>备注</label>
+                            <textarea id="comp-notes" rows="3"></textarea>
+                        </div>
+                        <button class="btn" onclick="addCompetition()">➕ 添加比赛</button>
+                    </div>
+                    <div>
+                        <h3>比赛列表</h3>
+                        <div id="competitions-table"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 项目管理 -->
+            <div id="tab-events" class="tab-content">
+                <h2>🎯 项目管理</h2>
+                <div class="grid">
+                    <div>
+                        <h3>添加项目</h3>
+                        <div class="form-group">
+                            <label>项目代码</label>
+                            <input type="text" id="event-code" placeholder="如：3x3" />
+                        </div>
+                        <div class="form-group">
+                            <label>项目名称</label>
+                            <input type="text" id="event-name" placeholder="如：三阶魔方" />
+                        </div>
+                        <div class="form-group">
+                            <label>描述</label>
+                            <textarea id="event-desc" rows="3"></textarea>
+                        </div>
+                        <button class="btn" onclick="addEvent()">➕ 添加项目</button>
+                    </div>
+                    <div>
+                        <h3>项目列表</h3>
+                        <div id="events-table"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 选手管理 -->
+            <div id="tab-participants" class="tab-content">
+                <h2>👤 选手管理</h2>
+                <div class="grid">
+                    <div>
+                        <h3>添加选手</h3>
+                        <div class="form-group">
+                            <label>选手名称</label>
+                            <input type="text" id="participant-name" placeholder="如：张三" />
+                        </div>
+                        <div class="form-group">
+                            <label>WCA ID（可选）</label>
+                            <input type="text" id="participant-wca" placeholder="如：2026ZSAN01" />
+                        </div>
+                        <button class="btn" onclick="addParticipant()">➕ 添加选手</button>
+                    </div>
+                    <div>
+                        <h3>选手列表</h3>
+                        <div id="participants-table"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 成绩录入 -->
+            <div id="tab-attempts" class="tab-content">
+                <h2>📝 成绩录入</h2>
+                <div class="grid">
+                    <div>
+                        <h3>录入成绩</h3>
+                        <div class="form-group">
+                            <label>选择比赛</label>
+                            <select id="attempt-competition"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>选择项目</label>
+                            <select id="attempt-event"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>选择选手</label>
+                            <select id="attempt-participant"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>尝试次数</label>
+                            <input type="number" id="attempt-number" value="1" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label>魔方类型</label>
+                            <select id="attempt-cube-type" onchange="toggleSmartFields()">
+                                <option value="smart">智能魔方</option>
+                                <option value="non_smart">非智能魔方</option>
+                            </select>
+                        </div>
+                        
+                        <div id="smart-fields" class="smart-fields">
+                            <h4>📡 智能魔方数据</h4>
+                            <div class="form-group">
+                                <label>步数</label>
+                                <input type="number" id="attempt-moves" placeholder="如：45" />
+                            </div>
+                            <div class="form-group">
+                                <label>TPS（步/秒）</label>
+                                <input type="number" id="attempt-tps" step="0.01" placeholder="如：2.5" />
+                            </div>
+                            <div class="form-group">
+                                <label>复原步骤（JSON）</label>
+                                <textarea id="attempt-steps" rows="3" placeholder='[{"move":"R","time":0.5,"comment":"// Cross"}]'></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>步骤注释（C++ 格式）</label>
+                                <textarea id="attempt-comments" rows="3" placeholder="// Cross&#10;// F2L pair 1&#10;// OLL&#10;// PLL"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div id="non-smart-fields" class="non-smart-fields" style="display:none;">
+                            <h4>📹 非智能魔方</h4>
+                            <div class="form-group">
+                                <label>录像链接（可选）</label>
+                                <input type="text" id="attempt-video" placeholder="https://..." />
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>复原时间（秒）</label>
+                            <input type="number" id="attempt-time" step="0.001" placeholder="如：8.234" />
+                        </div>
+                        <div class="form-group">
+                            <label>打乱公式</label>
+                            <textarea id="attempt-scramble" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="attempt-dnf" /> DNF（未完成）
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="attempt-plus-two" /> +2 秒
+                            </label>
+                        </div>
+                        <button class="btn btn-success" onclick="addAttempt()">✅ 提交成绩</button>
+                    </div>
+                    <div>
+                        <h3>最近成绩</h3>
+                        <div id="attempts-table"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 查看数据 -->
+            <div id="tab-view" class="tab-content">
+                <h2>📊 查看数据</h2>
+                <div class="form-group">
+                    <label>选择比赛</label>
+                    <select id="view-competition" onchange="loadViewData()"></select>
+                </div>
+                <div class="form-group">
+                    <label>选择项目</label>
+                    <select id="view-event" onchange="loadViewData()"></select>
+                </div>
+                <div id="view-table"></div>
+            </div>
+            
+            <!-- 统计分析 -->
+            <div id="tab-stats" class="tab-content">
+                <h2>📈 统计分析</h2>
+                <div class="form-group">
+                    <label>选择选手</label>
+                    <select id="stats-participant" onchange="loadStats()"></select>
+                </div>
+                <div class="form-group">
+                    <label>选择项目</label>
+                    <select id="stats-event" onchange="loadStats()"></select>
+                </div>
+                
+                <div id="stats-cards" class="stats-grid"></div>
+                
+                <h3>📊 成绩分布（Gamma 拟合）</h3>
+                <div class="chart-container">
+                    <canvas id="gamma-chart"></canvas>
+                </div>
+                
+                <h3>🎯 MLE 预测</h3>
+                <div id="mle-prediction" class="alert alert-info"></div>
+                
+                <h3>📋 详细统计</h3>
+                <div id="stats-table"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 使用 dbClient 避免和 CDN 全局变量 window.supabase 冲突
+        var dbClient = null;
+        
+        // Tabulator 表格实例
+        var competitionsTable = null;
+        var eventsTable = null;
+        var participantsTable = null;
+        var attemptsTable = null;
+        var viewTable = null;
+        var statsTable = null;
+        
+        // Chart.js 实例
+        var gammaChart = null;
+        
+        // 显示提示
+        function showAlert(message, type) {
+            var alertBox = document.getElementById('alertBox');
+            alertBox.className = 'alert alert-' + type;
+            alertBox.textContent = message;
+            alertBox.style.display = 'block';
+            setTimeout(function() { alertBox.style.display = 'none'; }, 5000);
+        }
+        
+        // 连接数据库
+        async function connectDB() {
+            var url = document.getElementById('supabaseUrl').value.trim();
+            var key = document.getElementById('supabaseKey').value.trim();
+            if (!url || !key) { showAlert('请填写 Supabase URL 和 Key', 'error'); return; }
+            try {
+                dbClient = window.supabase.createClient(url, key);
+                // 测试连接
+                var { data, error } = await dbClient.from('competitions').select('count').limit(1);
+                if (error) throw error;
+                showAlert('✅ 数据库连接成功！', 'success');
+                localStorage.setItem('supabase_url', url);
+                localStorage.setItem('supabase_key', key);
+                loadAllData();
+            } catch (e) {
+                showAlert('❌ 连接失败：' + e.message, 'error');
+            }
+        }
+        
+        // 切换标签页
+        function switchTab(tabName) {
+            var tabs = document.querySelectorAll('.tab');
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            event.target.classList.add('active');
+            var contents = document.querySelectorAll('.tab-content');
+            contents.forEach(function(c) { c.classList.remove('active'); });
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+        
+        // 切换智能/非智能魔方字段
+        function toggleSmartFields() {
+            var type = document.getElementById('attempt-cube-type').value;
+            document.getElementById('smart-fields').style.display = type === 'smart' ? 'block' : 'none';
+            document.getElementById('non-smart-fields').style.display = type === 'non_smart' ? 'block' : 'none';
+        }
+        
+        // 加载所有数据
+        async function loadAllData() {
+            if (!dbClient) return;
+            await Promise.all([
+                loadCompetitions(),
+                loadEvents(),
+                loadParticipants(),
+                loadCompetitionsForSelect('view-competition'),
+                loadCompetitionsForSelect('attempt-competition'),
+                loadParticipantsForSelect('stats-participant')
+            ]);
+        }
+        
+        // 加载比赛列表
+        async function loadCompetitions() {
+            var { data, error } = await dbClient.from('competitions').select('*').order('competition_number');
+            if (error) { showAlert('加载比赛失败：' + error.message, 'error'); return; }
+            if (competitionsTable) competitionsTable.destroy();
+            competitionsTable = new Tabulator('#competitions-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '编号', field: 'competition_number', width: 80 },
+                    { title: '名称', field: 'name' },
+                    { title: '日期', field: 'competition_date', formatter: function(cell) { return cell.getValue() ? cell.getValue().split('T')[0] : ''; } },
+                    { title: '地点', field: 'location' },
+                    { title: '操作', formatter: function() { return '<button class="btn btn-danger" style="padding:5px 10px;">删除</button>'; }, cellClick: function(e, cell) { deleteCompetition(cell.getRow().getData().id); } }
+                ]
+            });
+        }
+        
+        // 添加比赛
+        async function addCompetition() {
+            var num = document.getElementById('comp-number').value;
+            var name = document.getElementById('comp-name').value.trim();
+            var date = document.getElementById('comp-date').value;
+            if (!num || !name || !date) { showAlert('请填写完整信息', 'error'); return; }
+            var { error } = await dbClient.from('competitions').insert({
+                competition_number: parseInt(num),
+                name: name,
+                competition_date: date,
+                location: document.getElementById('comp-location').value.trim(),
+                notes: document.getElementById('comp-notes').value.trim()
+            });
+            if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+            showAlert('✅ 比赛添加成功！', 'success');
+            loadCompetitions();
+        }
+        
+        // 加载项目列表
+        async function loadEvents() {
+            var { data, error } = await dbClient.from('events').select('*').order('event_code');
+            if (error) return;
+            if (eventsTable) eventsTable.destroy();
+            eventsTable = new Tabulator('#events-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '代码', field: 'event_code', width: 100 },
+                    { title: '名称', field: 'event_name' },
+                    { title: '描述', field: 'description' }
+                ]
+            });
+        }
+        
+        // 添加项目
+        async function addEvent() {
+            var code = document.getElementById('event-code').value.trim();
+            var name = document.getElementById('event-name').value.trim();
+            if (!code || !name) { showAlert('请填写代码和名称', 'error'); return; }
+            var { error } = await dbClient.from('events').insert({
+                event_code: code,
+                event_name: name,
+                description: document.getElementById('event-desc').value.trim()
+            });
+            if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+            showAlert('✅ 项目添加成功！', 'success');
+            loadEvents();
+        }
+        
+        // 加载选手列表
+        async function loadParticipants() {
+            var { data, error } = await dbClient.from('participants').select('*').order('name');
+            if (error) return;
+            if (participantsTable) participantsTable.destroy();
+            participantsTable = new Tabulator('#participants-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '名称', field: 'name' },
+                    { title: 'WCA ID', field: 'wca_id' },
+                    { title: '备注', field: 'notes' }
+                ]
+            });
+        }
+        
+        // 添加选手
+        async function addParticipant() {
+            var name = document.getElementById('participant-name').value.trim();
+            if (!name) { showAlert('请填写选手名称', 'error'); return; }
+            var { error } = await dbClient.from('participants').insert({
+                name: name,
+                wca_id: document.getElementById('participant-wca').value.trim()
+            });
+            if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+            showAlert('✅ 选手添加成功！', 'success');
+            loadParticipants();
+        }
+        
+        // 加载比赛到下拉框
+        async function loadCompetitionsForSelect(selectId) {
+            var { data } = await dbClient.from('competitions').select('*').order('competition_number');
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择比赛 --</option>';
+            (data || []).forEach(function(c) {
+                sel.innerHTML += '<option value="' + c.id + '">' + c.competition_number + ' - ' + c.name + '</option>';
+            });
+        }
+        
+        // 加载选手到下拉框
+        async function loadParticipantsForSelect(selectId) {
+            var { data } = await dbClient.from('participants').select('*').order('name');
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择选手 --</option>';
+            (data || []).forEach(function(p) {
+                sel.innerHTML += '<option value="' + p.id + '">' + p.name + '</option>';
+            });
+        }
+        
+        // 提交成绩
+        async function addAttempt() {
+            // 简化版 - 完整版需要创建 competition_events 记录
+            showAlert('⚠️ 成绩录入需要完整实现 competition_events 关联，当前为演示版本', 'info');
+        }
+        
+        // 加载查看数据
+        async function loadViewData() {
+            // 简化版
+            showAlert('📊 数据查看功能开发中...', 'info');
+        }
+        
+        // 加载统计
+        async function loadStats() {
+            // 简化版
+            showAlert('📈 统计分析功能开发中...', 'info');
+        }
+        
+        // 页面加载时恢复配置
+        window.addEventListener('DOMContentLoaded', function() {
+            var url = localStorage.getItem('supabase_url');
+            var key = localStorage.getItem('supabase_key');
+            if (url && key) {
+                document.getElementById('supabaseUrl').value = url;
+                document.getElementById('supabaseKey').value = key;
+            }
+        });
+    </script>
+</body>
+</html>
