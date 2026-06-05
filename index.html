@@ -456,7 +456,8 @@
     </div>
 
     <script>
-        let supabase = null;
+        // 使用 dbClient 避免和 CDN 全局变量 window.supabase 冲突
+        var dbClient = null;
         let isConnected = false;
 
         // 连接 Supabase
@@ -470,10 +471,10 @@
             }
 
             try {
-                supabase = window.supabase.createClient(url, key);
+                dbClient = window.supabase.createClient(url, key);
                 
                 // 测试连接
-                const { data, error } = await supabase.from('competitions').select('count').limit(1);
+                const { data, error } = await dbClient.from('competitions').select('count').limit(1);
                 
                 if (error) throw error;
                 
@@ -546,7 +547,7 @@
             }
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await dbClient
                     .from('competitions')
                     .insert([{
                         competition_number: compNumber,
@@ -586,7 +587,7 @@
             if (!isConnected) return;
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await dbClient
                     .from('competitions')
                     .select('id, competition_number, name')
                     .order('competition_date', { ascending: false });
@@ -680,7 +681,7 @@
             }
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await dbClient
                     .from('attempts')
                     .insert([attemptData])
                     .select();
@@ -719,7 +720,7 @@
             }
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await dbClient
                     .from('competitions')
                     .select('*')
                     .order('competition_date', { ascending: false });
@@ -741,7 +742,7 @@
             }
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await dbClient
                     .from('attempts')
                     .select(`
                         *,
@@ -767,13 +768,13 @@
             }
 
             try {
-                const { data: compStats, error: compError } = await supabase
+                const { data: compStats, error: compError } = await dbClient
                     .from('competition_stats')
                     .select('*');
 
                 if (compError) throw compError;
 
-                const { data: partStats, error: partError } = await supabase
+                const { data: partStats, error: partError } = await dbClient
                     .from('participant_stats')
                     .select('*');
 

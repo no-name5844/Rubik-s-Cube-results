@@ -141,10 +141,12 @@ CREATE POLICY "Allow public update access on attempts" ON attempts
 
 -- ============================================
 -- 6. 创建视图 - 方便查询统计数据
+-- 使用 SECURITY INVOKER 确保遵循 RLS 策略
 -- ============================================
 
 -- 比赛统计视图
-CREATE OR REPLACE VIEW competition_stats AS
+CREATE OR REPLACE VIEW competition_stats
+WITH (security_invoker = true) AS
 SELECT 
     c.id AS competition_id,
     c.competition_number,
@@ -161,7 +163,8 @@ LEFT JOIN attempts a ON c.id = a.competition_id
 GROUP BY c.id, c.competition_number, c.name, c.competition_date;
 
 -- 选手统计视图
-CREATE OR REPLACE VIEW participant_stats AS
+CREATE OR REPLACE VIEW participant_stats
+WITH (security_invoker = true) AS
 SELECT 
     p.id AS participant_id,
     p.name AS participant_name,
