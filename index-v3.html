@@ -296,7 +296,7 @@
                         <h3>录入成绩</h3>
                         <div class="form-group">
                             <label>选择比赛</label>
-                            <select id="attempt-competition"></select>
+                            <select id="attempt-competition" onchange="loadCompetitionEventsForAttempt()"></select>
                         </div>
                         <div class="form-group">
                             <label>选择项目</label>
@@ -378,7 +378,7 @@
                 <h2>📊 查看数据</h2>
                 <div class="form-group">
                     <label>选择比赛</label>
-                    <select id="view-competition" onchange="loadViewData()"></select>
+                    <select id="view-competition" onchange="loadCompetitionEventsForView()"></select>
                 </div>
                 <div class="form-group">
                     <label>选择项目</label>
@@ -604,22 +604,473 @@
             });
         }
         
-        // 提交成绩
+        // 提交成绩（完整实现）
         async function addAttempt() {
-            // 简化版 - 完整版需要创建 competition_events 记录
-            showAlert('⚠️ 成绩录入需要完整实现 competition_events 关联，当前为演示版本', 'info');
+            var competitionId = document.getElementById('attempt-competition').value;
+            var eventId = document.getElementById('attempt-event').value;
+            var participantId = document.getElementById('attempt-participant').value;
+            if (!competitionId || !eventId || !participantId) {
+                showAlert('请选择比赛、项目和选手', 'error'); return;
+            }
+            // 1. 查找或创建 competition_events 记录
+            var { data: ceData, error: ceError } = await dbClient
+                .from('competition_events')
+                .select('id')
+                .eq('competition_id', competitionId)
+                .eq('event_id', eventId)
+                .maybeSingle();
+            if (ceError) { showAlert('查询比赛项目失败：' + ceError.message, 'error'); return; }
+            var ceId = ceData ? ceData.id : null;
+            if (!ceId) {
+                // 获取当前比赛的最大 event_number
+                var { data: maxData } = await dbClient
+                    .from('competition_events')
+                    .select('event_number')
+                    .eq('competition_id', competitionId)
+                    .order('event_number', { ascending: false })
+                    .limit(1);
+                var nextNum = (maxData && maxData.length > 0) ? maxData[0].event_number + 1 : 1;
+                var { data: newCe, error: insertError } = await dbClient
+                    .from('competition_events')
+                    .insert({ competition_id: competitionId, event_id: eventId, event_number: nextNum })
+                    .select('id')
+                    .single();
+                if (insertError) { showAlert('创建比赛项目关联失败：' + insertError.message, 'error'); return; }
+                ceId = newCe.id;
+            }
+            // 2. 收集表单数据
+            var attemptNum = parseInt(document.getElementById('attempt-number').value) || 1;
+            var cubeType = document.getElementById('attempt-cube-type').value;
+            var solveTime = parseFloat(document.getElementById('attempt-time').value) || null;
+            var isDnf = document.getElementById('attempt-dnf').checked;
+            var isPlusTwo = document.getElementById('attempt-plus-two').checked;
+            if (!isDnf && solveTime === null) { showAlert('请输入复原时间或勾选 DNF', 'error'); return; }
+            var attemptData = {
+                competition_event_id: ceId,
+                participant_id: participantId,
+                attempt_number: attemptNum,
+                solve_time: isDnf ? null : solveTime,
+                cube_type: cubeType,
+                scramble: document.getElementById('attempt-scramble').value.trim(),
+                is_dnf: isDnf,
+                is_plus_two: isPlusTwo,
+                notes: ''
+            };
+            if (cubeType === 'smart') {
+                attemptData.move_count = parseInt(document.getElementById('attempt-moves').value) || null;
+                attemptData.tps = parseFloat(document.getElementById('attempt-tps').value) || null;
+                var stepsText = document.getElementById('attempt-steps').value.trim();
+                if (stepsText) {
+                    try { attemptData.solve_steps = JSON.parse(stepsText); } catch(e) {}
+                }
+                attemptData.step_comments = document.getElementById('attempt-comments').value.trim();
+            } else {
+                attemptData.video_url = document.getElementById('attempt-video').value.trim();
+            }
+            // 3. 插入数据库
+            var { error: insertError } = await dbClient.from('attempts').insert(attemptData);
+            if (insertError) { showAlert('提交成绩失败：' + insertError.message, 'error'); return; }
+            showAlert('✅ 成绩提交成功！', 'success');
+            // 4. 刷新最近成绩表格
+            loadRecentAttempts();
+            // 5. 清空表单
+            document.getElementById('attempt-time').value = '';
+            document.getElementById('attempt-scramble').value = '';
+            document.getElementById('attempt-dnf').checked = false;
+            document.getElementById('attempt-plus-two').checked = false;
+            if (cubeType === 'smart') {
+                document.getElementById('attempt-moves').value = '';
+                document.getElementById('attempt-tps').value = '';
+                document.getElementById('attempt-steps').value = '';
+                document.getElementById('attempt-comments').value = '';
+            } else {
+                document.getElementById('attempt-video').value = '';
+            }
         }
         
-        // 加载查看数据
+        // 加载最近成绩
+        async function loadRecentAttempts() {
+            var { data, error } = await dbClient
+                .from('attempts')
+                .select('*, participants(name), competition_events(competitions(name), events(event_name))')
+                .order('created_at', { ascending: false })
+                .limit(50);
+            if (error) return;
+            if (attemptsTable) attemptsTable.destroy();
+            attemptsTable = new Tabulator('#attempts-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '选手', field: 'participants.name' },
+                    { title: '项目', field: 'competition_events.events.event_name' },
+                    { title: '比赛', field: 'competition_events.competitions.name' },
+                    { title: '次数', field: 'attempt_number', width: 80 },
+                    { title: '时间', formatter: function(cell) {
+                        var row = cell.getRow().getData();
+                        if (row.is_dnf) return 'DNF';
+                        if (!row.solve_time) return '-';
+                        return row.solve_time + (row.is_plus_two ? '+' : '');
+                    }},
+                    { title: '魔方', field: 'cube_type', width: 100 },
+                    { title: 'TPS', field: 'tps', width: 80 }
+                ]
+            });
+        }
+        
+        // 加载查看数据（完整实现）
         async function loadViewData() {
-            // 简化版
-            showAlert('📊 数据查看功能开发中...', 'info');
+            var competitionId = document.getElementById('view-competition').value;
+            var eventId = document.getElementById('view-event').value;
+            if (!competitionId || !eventId) {
+                document.getElementById('view-table').innerHTML = '<p class="loading">请选择比赛和项目</p>';
+                return;
+            }
+            // 1. 查找 competition_event_id
+            var { data: ceData, error: ceError } = await dbClient
+                .from('competition_events')
+                .select('id')
+                .eq('competition_id', competitionId)
+                .eq('event_id', eventId)
+                .single();
+            if (ceError) { showAlert('查询失败：' + ceError.message, 'error'); return; }
+            // 2. 查询成绩
+            var { data, error } = await dbClient
+                .from('attempts')
+                .select('*, participants(name)')
+                .eq('competition_event_id', ceData.id)
+                .order('attempt_number');
+            if (error) { showAlert('加载数据失败：' + error.message, 'error'); return; }
+            // 3. 用 Tabulator 显示
+            if (viewTable) viewTable.destroy();
+            viewTable = new Tabulator('#view-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '选手', field: 'participants.name' },
+                    { title: '次数', field: 'attempt_number', width: 80 },
+                    { title: '时间', formatter: function(cell) {
+                        var row = cell.getRow().getData();
+                        if (row.is_dnf) return 'DNF';
+                        if (!row.solve_time) return '-';
+                        return row.solve_time + (row.is_plus_two ? '+' : '');
+                    }},
+                    { title: '魔方类型', field: 'cube_type', width: 100 },
+                    { title: '步数', field: 'move_count', width: 80 },
+                    { title: 'TPS', field: 'tps', width: 80 },
+                    { title: '打乱', field: 'scramble', width: 150 },
+                    { title: '备注', formatter: function(cell) {
+                        var row = cell.getRow().getData();
+                        return row.is_dnf ? 'DNF' : (row.is_plus_two ? '+2' : '');
+                    }, width: 80 }
+                ]
+            });
         }
         
-        // 加载统计
+        // 加载项目和事件下拉框（辅助函数）
+        async function loadEventsForSelect(selectId) {
+            var { data } = await dbClient.from('events').select('*').order('event_code');
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择项目 --</option>';
+            (data || []).forEach(function(e) {
+                sel.innerHTML += '<option value="' + e.id + '">' + e.event_code + ' - ' + e.event_name + '</option>';
+            });
+        }
+        
+        // 加载比赛中的项目（根据选择的比赛动态更新项目下拉框）
+        async function loadCompetitionEvents(competitionId, selectId) {
+            if (!competitionId) {
+                document.getElementById(selectId).innerHTML = '<option value="">-- 先选择比赛 --</option>';
+                return;
+            }
+            var { data } = await dbClient
+                .from('competition_events')
+                .select('*, events(*)')
+                .eq('competition_id', competitionId);
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择项目 --</option>';
+            (data || []).forEach(function(ce) {
+                sel.innerHTML += '<option value="' + ce.event_id + '">' + ce.events.event_code + ' - ' + ce.events.event_name + '</option>';
+            });
+        }
+        
+        // 修改 loadAllData 添加加载项目下拉框
+        // （已在上方重新定义 loadAllData，此处删除重复）
+
+        
+        // 加载统计分析（完整实现）
         async function loadStats() {
-            // 简化版
-            showAlert('📈 统计分析功能开发中...', 'info');
+            var participantId = document.getElementById('stats-participant').value;
+            var eventId = document.getElementById('stats-event').value;
+            if (!participantId || !eventId) {
+                document.getElementById('stats-cards').innerHTML = '';
+                document.getElementById('mle-prediction').innerHTML = '请选择选手和项目';
+                return;
+            }
+            // 1. 获取该选手在该项目的所有有效成绩
+            var { data: attempts, error } = await dbClient
+                .from('attempts')
+                .select('*, competition_events!inner(*)')
+                .eq('participant_id', participantId)
+                .eq('competition_events.event_id', eventId)
+                .eq('is_dnf', false)
+                .not('solve_time', 'is', null)
+                .order('created_at');
+            if (error) { showAlert('加载成绩失败：' + error.message, 'error'); return; }
+            if (!attempts || attempts.length === 0) {
+                document.getElementById('mle-prediction').innerHTML = '暂无有效成绩';
+                return;
+            }
+            // 2. 计算统计数据
+            var times = attempts.map(a => a.solve_time);
+            var single = Math.min(...times);
+            var currentAvg = times.reduce((a, b) => a + b, 0) / times.length;
+            // 计算 AO5（滑动窗口）
+            var ao5List = [];
+            for (var i = 4; i < times.length; i++) {
+                var window = times.slice(i-4, i+1);
+                var sorted = window.slice().sort((a,b) => a - b);
+                var avg = (sorted[1] + sorted[2] + sorted[3]) / 3;
+                ao5List.push(avg);
+            }
+            var bestAo5 = ao5List.length > 0 ? Math.min(...ao5List) : null;
+            // 计算 AO12
+            var ao12List = [];
+            for (var i = 11; i < times.length; i++) {
+                var window = times.slice(i-11, i+1);
+                var sorted = window.slice().sort((a,b) => a - b);
+                var avg = (sorted[1] + sorted[2] + sorted[3] + sorted[4] + sorted[5] + sorted[6] + sorted[7] + sorted[8] + sorted[9] + sorted[10]) / 10;
+                ao12List.push(avg);
+            }
+            var bestAo12 = ao12List.length > 0 ? Math.min(...ao12List) : null;
+            // 3. 显示统计卡片
+            var cardsHtml = 
+                '<div class="stat-card"><h3>单次最佳</h3><div class="value">' + single.toFixed(3) + '</div></div>' +
+                '<div class="stat-card"><h3>当前平均</h3><div class="value">' + currentAvg.toFixed(3) + '</div></div>' +
+                (bestAo5 ? '<div class="stat-card"><h3>最佳 AO5</h3><div class="value">' + bestAo5.toFixed(3) + '</div></div>' : '') +
+                (bestAo12 ? '<div class="stat-card"><h3>最佳 AO12</h3><div class="value">' + bestAo12.toFixed(3) + '</div></div>' : '') +
+                '<div class="stat-card"><h3>总次数</h3><div class="value">' + times.length + '</div></div>';
+            document.getElementById('stats-cards').innerHTML = cardsHtml;
+            // 4. Gamma 分布 MLE 拟合
+            var mle = fitGammaMLE(times);
+            if (!mle) {
+                document.getElementById('mle-prediction').innerHTML = '成绩数据不足，无法拟合';
+                return;
+            }
+            var alpha = mle.alpha;
+            var beta = mle.beta;
+            var mode = (alpha > 1) ? (alpha - 1) / beta : 0;  // 众数 = 真实水平
+            var mean = alpha / beta;
+            var variance = alpha / (beta * beta);
+            // 5. 显示 MLE 预测
+            var predictionHtml = 
+                '<h4>📊 Gamma 分布参数（MLE 估计）</h4>' +
+                '<p><strong>α（形状）＝</strong> ' + alpha.toFixed(3) + '</p>' +
+                '<p><strong>β（尺度）＝</strong> ' + beta.toFixed(3) + '</p>' +
+                '<p><strong>众数（真实水平）＝</strong> ' + mode.toFixed(3) + ' 秒</p>' +
+                '<p><strong>均值＝</strong> ' + mean.toFixed(3) + ' 秒</p>' +
+                '<p><strong>标准差＝</strong> ' + Math.sqrt(variance).toFixed(3) + ' 秒</p>' +
+                '<h4>🎯 预测</h4>' +
+                '<p>下次成绩 < 10 秒的概率：～ ' + (gammaCdf(10, alpha, beta) * 100).toFixed(1) + '%</p>' +
+                '<p>下次成绩在 ' + mode.toFixed(1) + ' ± 2 秒内的概率：～ ' + ((gammaCdf(mode+2, alpha, beta) - gammaCdf(Math.max(0, mode-2), alpha, beta)) * 100).toFixed(1) + '%</p>';
+            document.getElementById('mle-prediction').innerHTML = predictionHtml;
+            // 6. 绘制 Gamma 分布图
+            drawGammaChart(times, alpha, beta);
+            // 7. 保存 MLE 预测结果到数据库
+            await dbClient.from('mle_predictions').upsert({
+                participant_id: participantId,
+                event_id: eventId,
+                alpha: alpha,
+                beta: beta,
+                mode_value: mode,
+                mean_value: mean,
+                variance_value: variance,
+                sample_size: times.length,
+                confidence_interval: JSON.stringify({ lower: mode - 2*Math.sqrt(variance), upper: mode + 2*Math.sqrt(variance) })
+            }, { onConflict: 'participant_id,event_id' });
+        }
+        
+        // ========== Gamma 分布 MLE 拟合 ==========
+        function fitGammaMLE(times) {
+            if (!times || times.length < 3) return null;
+            // 使用矩估计初始化，然后用数值优化求 MLE
+            var n = times.length;
+            var mean = times.reduce((a, b) => a + b, 0) / n;
+            var variance = times.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / n;
+            // 矩估计：alpha = mean^2 / variance, beta = mean / variance
+            var alpha0 = (mean * mean) / variance;
+            var beta0 = mean / variance;
+            // 简单数值优化（固定点迭代）
+            var alpha = alpha0;
+            var beta = beta0;
+            for (var iter = 0; iter < 100; iter++) {
+                var digammaAlpha = digamma(alpha);
+                var alphaNew = alpha - (Math.log(alpha) - digammaAlpha - Math.log(mean) + meanOfLog(times)) / (1/alpha - trigamma(alpha));
+                var betaNew = alphaNew / mean;
+                if (Math.abs(alphaNew - alpha) < 0.0001) { alpha = alphaNew; beta = betaNew; break; }
+                alpha = alphaNew;
+                beta = betaNew;
+            }
+            return { alpha: alpha, beta: beta };
+        }
+        
+        // 辅助函数：digamma 函数（近似）
+        function digamma(x) {
+            if (x < 1e-6) return -1e10;
+            var result = 0;
+            while (x < 6) { result -= 1 / x; x++; }
+            var invX = 1 / x;
+            var invX2 = invX * invX;
+            return result + Math.log(x) - 0.5*invX - invX2*(1/12 - invX2*(1/120 - invX2/252));
+        }
+        
+        // 辅助函数：trigamma 函数（digamma 的导数）
+        function trigamma(x) {
+            if (x < 1e-6) return 1e10;
+            var result = 0;
+            while (x < 6) { result += 1 / (x * x); x++; }
+            var invX = 1 / x;
+            var invX2 = invX * invX;
+            return result + 0.5*invX2 + invX/ x + invX2*(1/6 - invX2*(1/30 - invX2/42));
+        }
+        
+        // 辅助函数：计算 log(times) 的均值
+        function meanOfLog(times) {
+            var sum = 0;
+            for (var i = 0; i < times.length; i++) {
+                if (times[i] > 0) sum += Math.log(times[i]);
+            }
+            return sum / times.length;
+        }
+        
+        // Gamma 分布 CDF（不完全 Gamma 函数）
+        function gammaCdf(x, alpha, beta) {
+            var z = x * beta;
+            return lowerIncompleteGamma(alpha, z);
+        }
+        
+        // 下不完全 Gamma 函数（正则化）
+        function lowerIncompleteGamma(s, x) {
+            if (x < 0) return 0;
+            if (x === 0) return 0;
+            // 使用级数展开
+            var maxIter = 200;
+            var sum = 0;
+            var term = 1 / s;
+            for (var n = 1; n <= maxIter; n++) {
+                sum += term;
+                term *= x / (s + n);
+                if (Math.abs(term) < 1e-10) break;
+            }
+            return Math.exp(-x + s*Math.log(x) - logGamma(s)) * sum;
+        }
+        
+        // Log-Gamma 函数（Lanczos 近似）
+        function logGamma(x) {
+            var coef = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+            var y = x;
+            var tmp = x + 5.5;
+            tmp -= (x + 0.5) * Math.log(tmp);
+            var ser = 1.000000000190015;
+            for (var j = 0; j <= 5; j++) ser += coef[j] / ++y;
+            return -tmp + Math.log(2.5066282746310005 * ser / x);
+        }
+        
+        // ========== 绘制 Gamma 分布图 ==========
+        function drawGammaChart(times, alpha, beta) {
+            var ctx = document.getElementById('gamma-chart').getContext('2d');
+            // 准备数据：直方图
+            var min = Math.min(...times);
+            var max = Math.max(...times);
+            var binCount = Math.min(30, Math.ceil(Math.sqrt(times.length)));
+            var binWidth = (max - min) / binCount;
+            var bins = [];
+            for (var i = 0; i < binCount; i++) {
+                bins.push({ x0: min + i*binWidth, x1: min + (i+1)*binWidth, count: 0 });
+            }
+            times.forEach(function(t) {
+                var idx = Math.floor((t - min) / binWidth);
+                if (idx >= binCount) idx = binCount - 1;
+                if (idx >= 0) bins[idx].count++;
+            });
+            // Gamma PDF 曲线
+            var mode = (alpha > 1) ? (alpha - 1) / beta : 0;
+            var chartMin = Math.max(0, mode - 4*Math.sqrt(alpha/(beta*beta)));
+            var chartMax = mode + 4*Math.sqrt(alpha/(beta*beta));
+            var curvePoints = [];
+            for (var x = chartMin; x <= chartMax; x += 0.1) {
+                var pdf = (Math.pow(beta, alpha) / Math.exp(logGamma(alpha))) * Math.pow(x, alpha-1) * Math.exp(-beta*x);
+                curvePoints.push({ x: x, y: pdf * times.length * binWidth });
+            }
+            // 销毁旧图表
+            if (gammaChart) gammaChart.destroy();
+            // 绘制新图表
+            gammaChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: bins.map(function(b) { return b.x0.toFixed(1); }),
+                    datasets: [{
+                        label: '实际成绩分布',
+                        data: bins.map(function(b) { return b.count; }),
+                        backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Gamma 拟合曲线',
+                        data: curvePoints.map(function(p) { return p.y; }),
+                        type: 'line',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: '成绩（秒）' } },
+                        y: { title: { display: true, text: '频数' }, beginAtZero: true }
+                    },
+                    plugins: {
+                        title: { display: true, text: '成绩分布（Gamma 拟合）' }
+                    }
+                }
+            });
+        }
+        
+        // 修改 loadAllData 添加加载项目下拉框
+        // （在原有 loadAllData 基础上添加）
+        // 此处通过重写实现
+        var originalLoadAllData = loadAllData;
+        loadAllData = async function() {
+            if (!dbClient) return;
+            await Promise.all([
+                loadCompetitions(),
+                loadEvents(),
+                loadParticipants(),
+                loadCompetitionsForSelect('view-competition'),
+                loadCompetitionsForSelect('attempt-competition'),
+                loadParticipantsForSelect('stats-participant'),
+                loadEventsForSelect('attempt-event'),
+                loadEventsForSelect('view-event'),
+                loadEventsForSelect('stats-event')
+            ]);
+        };
+
+        
+        // ========= 动态加载比赛项目（查看数据页） =========
+        function loadCompetitionEventsForView() {
+            var competitionId = document.getElementById('view-competition').value;
+            loadCompetitionEvents(competitionId, 'view-event');
+            document.getElementById('view-table').innerHTML = '';
+        }
+        
+        // ========= 动态加载比赛项目（成绩录入页） =========
+        function loadCompetitionEventsForAttempt() {
+            var competitionId = document.getElementById('attempt-competition').value;
+            loadCompetitionEvents(competitionId, 'attempt-event');
         }
         
         // 页面加载时恢复配置
