@@ -175,6 +175,125 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* ========== 响应式设计 ========== */
+        
+        /* 中等屏幕（平板横屏，992px - 1199px） */
+        @media (max-width: 1199px) {
+            .container { margin: 0 10px; }
+            .header h1 { font-size: 1.8em; }
+            .content { padding: 20px; }
+        }
+        
+        /* 小屏幕（平板竖屏，768px - 991px） */
+        @media (max-width: 991px) {
+            body { padding: 10px; }
+            .header { padding: 20px; }
+            .header h1 { font-size: 1.5em; }
+            .header p { font-size: 1em; }
+            .config-bar { padding: 15px; }
+            .config-bar input { min-width: 200px; }
+            .content { padding: 15px; }
+            .grid { grid-template-columns: 1fr; }
+            .chart-container { height: 300px; }
+            .stats-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+            .tab { padding: 15px 10px; font-size: 0.9em; }
+        }
+        
+        /* 超小屏幕（手机，< 768px） */
+        @media (max-width: 767px) {
+            body { padding: 5px; }
+            .container { border-radius: 8px; }
+            .header { padding: 15px; }
+            .header h1 { font-size: 1.3em; margin-bottom: 5px; }
+            .header p { font-size: 0.9em; }
+            .config-bar { 
+                flex-direction: column; 
+                padding: 10px;
+                gap: 10px;
+            }
+            .config-bar input { 
+                min-width: 100%; 
+                font-size: 16px; /* 防止 iOS 自动缩放 */
+            }
+            .config-bar button { 
+                width: 100%;
+                padding: 12px;
+            }
+            .tabs { 
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab {
+                flex: 0 0 auto;
+                min-width: 100px;
+                padding: 12px 8px;
+                font-size: 0.85em;
+            }
+            .content { padding: 10px; }
+            .form-group input, 
+            .form-group select, 
+            .form-group textarea {
+                font-size: 16px; /* 防止 iOS 自动缩放 */
+                padding: 10px 12px;
+            }
+            .btn {
+                width: 100%;
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            .grid { 
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            .chart-container { 
+                height: 250px;
+                margin: 15px 0;
+            }
+            .stats-grid { 
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 10px;
+            }
+            .stat-card { padding: 15px; }
+            .stat-card .value { font-size: 1.5em; }
+            .smart-fields, 
+            .non-smart-fields { 
+                padding: 10px;
+                margin: 10px 0;
+            }
+        }
+        
+        /* 表格响应式包装器 */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 15px 0;
+        }
+        
+        /* 超小屏幕下的表格优化 */
+        @media (max-width: 767px) {
+            .table-responsive { margin: 10px -10px; }
+            .tabulator { font-size: 12px; }
+            .tabulator .tabulator-header { font-size: 11px; }
+            .tabulator .tabulator-cell { padding: 4px 6px; }
+        }
+        
+        /* 打印样式 */
+        @media print {
+            body { 
+                background: white; 
+                padding: 0;
+            }
+            .container { 
+                box-shadow: none; 
+                border-radius: 0;
+            }
+            .config-bar, .tabs { display: none; }
+            .tab-content { display: block !important; }
+            .btn { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -233,7 +352,7 @@
                     </div>
                     <div>
                         <h3>比赛列表</h3>
-                        <div id="competitions-table"></div>
+                        <div class="table-responsive"><div id="competitions-table"></div></div>
                         <hr style="margin: 24px 0; border: none; border-top: 1px solid #e9ecef;">
                         <h3>⚙️ 为比赛配置项目</h3>
                         <div class="form-group">
@@ -275,7 +394,7 @@
                     </div>
                     <div>
                         <h3>项目列表</h3>
-                        <div id="events-table"></div>
+                        <div class="table-responsive"><div id="events-table"></div></div>
                     </div>
                 </div>
             </div>
@@ -298,7 +417,7 @@
                     </div>
                     <div>
                         <h3>选手列表</h3>
-                        <div id="participants-table"></div>
+                        <div class="table-responsive"><div id="participants-table"></div></div>
                     </div>
                 </div>
             </div>
@@ -383,7 +502,7 @@
                     </div>
                     <div>
                         <h3>最近成绩</h3>
-                        <div id="attempts-table"></div>
+                        <div class="table-responsive"><div id="attempts-table"></div></div>
                     </div>
                 </div>
             </div>
@@ -399,7 +518,7 @@
                     <label>选择项目</label>
                     <select id="view-event" onchange="loadViewData()"></select>
                 </div>
-                <div id="view-table"></div>
+                <div class="table-responsive"><div id="view-table"></div></div>
             </div>
             
             <!-- 统计分析 -->
@@ -425,7 +544,7 @@
                 <div id="mle-prediction" class="alert alert-info"></div>
                 
                 <h3>📋 详细统计</h3>
-                <div id="stats-table"></div>
+                <div class="table-responsive"><div id="stats-table"></div></div>
             </div>
         </div>
     </div>

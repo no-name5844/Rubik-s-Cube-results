@@ -19,3 +19,4 @@ npm-debug.log*
 node_modules/
 成绩录入表.xlsx
 gen_excel.py
+RESPONSIVE_TEST.md
