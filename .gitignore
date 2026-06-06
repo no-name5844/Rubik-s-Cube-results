@@ -17,3 +17,5 @@ npm-debug.log*
 
 # Dependencies (if any)
 node_modules/
+成绩录入表.xlsx
+gen_excel.py

@@ -3,820 +3,1084 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>魔方比赛成绩管理系统</title>
+    <title>魔方比赛成绩管理系统 v3</title>
+    
+    <!-- Supabase CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Tabulator for tables -->
+    <link href="https://unpkg.com/tabulator-tables@5.6.0/dist/css/tabulator_materialize.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/tabulator-tables@5.6.0/dist/js/tabulator.min.js"></script>
+    
+    <!-- Chart.js for Gamma distribution chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-
         .container {
-            max-width: 900px;
+            max-width: 1400px;
             margin: 0 auto;
-        }
-
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .config-panel {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
         }
-
-        .config-panel h2 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.3em;
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
         }
-
-        .config-panel input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 10px;
-            border: 2px solid #e0e0e0;
+        .header h1 { font-size: 2em; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
+        
+        .config-bar {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .config-bar input {
+            flex: 1;
+            min-width: 300px;
+            padding: 12px 16px;
+            border: 2px solid #dee2e6;
             border-radius: 8px;
             font-size: 14px;
-            transition: border-color 0.3s;
         }
-
-        .config-panel input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .btn {
+        .config-bar button {
             padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
-            margin-right: 10px;
+            font-size: 14px;
+            font-weight: 600;
         }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-success {
-            background: #48bb78;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #38a169;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
-        }
-
-        .btn-danger {
-            background: #f56565;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #e53e3e;
-        }
-
+        .config-bar button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .config-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
         .tabs {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
         }
-
         .tab {
             flex: 1;
-            padding: 15px;
-            background: rgba(255,255,255,0.2);
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 10px;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
+            padding: 18px;
+            text-align: center;
             cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
             transition: all 0.3s;
+            border-bottom: 3px solid transparent;
         }
-
-        .tab:hover {
-            background: rgba(255,255,255,0.3);
-        }
-
-        .tab.active {
-            background: white;
-            color: #667eea;
-            border-color: white;
-        }
-
-        .panel {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            display: none;
-        }
-
-        .panel.active {
-            display: block;
-            animation: fadeIn 0.3s;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
+        .tab:hover { background: #e9ecef; color: #495057; }
+        .tab.active { color: #667eea; border-bottom-color: #667eea; background: white; }
+        
+        .content { padding: 30px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .form-group { margin-bottom: 20px; }
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            color: #2d3748;
             font-weight: 600;
-            font-size: 14px;
+            color: #495057;
         }
-
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
+        .form-group input, .form-group select, .form-group textarea {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e2e8f0;
+            padding: 12px 16px;
+            border: 2px solid #dee2e6;
             border-radius: 8px;
             font-size: 14px;
-            transition: border-color 0.3s;
         }
-
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
             outline: none;
             border-color: #667eea;
         }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 80px;
+        
+        .btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
         }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        .smart-fields {
-            background: #f0f4ff;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 15px;
-            border-left: 4px solid #667eea;
-        }
-
-        .smart-fields h3 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }
-
-        .message {
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .btn-success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .btn-danger { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+        
+        .alert {
             padding: 15px 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            font-weight: 500;
+            display: none;
         }
-
-        .message.success {
-            background: #c6f6d5;
-            color: #22543d;
-            border-left: 4px solid #48bb78;
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        
+        #table-container { margin-top: 20px; }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 30px 0;
         }
-
-        .message.error {
-            background: #fed7d7;
-            color: #742a2a;
-            border-left: 4px solid #f56565;
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
         }
-
-        .message.info {
-            background: #bee3f8;
-            color: #2a4365;
-            border-left: 4px solid #4299e1;
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
         }
-
-        .data-preview {
-            background: #f7fafc;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 15px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .data-preview pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            color: #2d3748;
-            font-size: 13px;
-        }
-
-        .status-indicator {
+        .stat-card h3 { font-size: 0.9em; opacity: 0.9; margin-bottom: 8px; }
+        .stat-card .value { font-size: 2em; font-weight: bold; }
+        
+        .smart-fields { background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .non-smart-fields { background: #fff3e0; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        
+        .loading { text-align: center; padding: 40px; color: #6c757d; }
+        .loading::after {
+            content: '';
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 30px; height: 30px;
+            border: 3px solid #dee2e6;
+            border-top-color: #667eea;
             border-radius: 50%;
-            margin-right: 8px;
+            animation: spin 1s linear infinite;
         }
-
-        .status-indicator.connected {
-            background: #48bb78;
-            box-shadow: 0 0 10px #48bb78;
-        }
-
-        .status-indicator.disconnected {
-            background: #f56565;
-        }
-
-        .help-text {
-            font-size: 12px;
-            color: #718096;
-            margin-top: 5px;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎲 魔方比赛成绩管理系统</h1>
-            <p>记录每一次打乱、每一步复原</p>
+            <h1>🎲 魔方比赛成绩管理系统 v3</h1>
+            <p>项目管理 · Gamma MLE 预测 · 高度可自定义统计</p>
         </div>
-
-        <div class="config-panel">
-            <h2>⚙️ Supabase 配置</h2>
-            <div class="form-group">
-                <label>Supabase URL</label>
-                <input type="text" id="supabaseUrl" placeholder="https://xxxxx.supabase.co">
-                <div class="help-text">在 Supabase 项目设置 → API 中找到 URL</div>
-            </div>
-            <div class="form-group">
-                <label>Anon Key (公开密钥)</label>
-                <input type="text" id="supabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
-                <div class="help-text">在 Supabase 项目设置 → API 中找到 anon public key</div>
-            </div>
-            <button class="btn btn-primary" onclick="connectSupabase()">🔗 连接数据库</button>
-            <span id="connectionStatus"></span>
+        
+        <div class="config-bar">
+            <input type="text" id="supabaseUrl" placeholder="Supabase URL" />
+            <input type="text" id="supabaseKey" placeholder="Anon Key" />
+            <button onclick="connectDB()">🔗 连接数据库</button>
+            <button onclick="loadAllData()">🔄 刷新数据</button>
         </div>
-
+        
+        <div id="alertBox"></div>
+        
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('competition')">📅 添加比赛</button>
-            <button class="tab" onclick="switchTab('attempt')">🎯 添加成绩</button>
-            <button class="tab" onclick="switchTab('view')">📊 查看数据</button>
+            <div class="tab active" onclick="switchTab('competitions')">🏆 比赛管理</div>
+            <div class="tab" onclick="switchTab('events')">🎯 项目管理</div>
+            <div class="tab" onclick="switchTab('participants')">👤 选手管理</div>
+            <div class="tab" onclick="switchTab('attempts')">📝 成绩录入</div>
+            <div class="tab" onclick="switchTab('view')">📊 查看数据</div>
+            <div class="tab" onclick="switchTab('stats')">📈 统计分析</div>
         </div>
-
-        <!-- 添加比赛面板 -->
-        <div id="competitionPanel" class="panel active">
-            <h2 style="color: #667eea; margin-bottom: 20px;">添加新的比赛</h2>
-            <div id="competitionMessage"></div>
-            <div class="form-group">
-                <label>比赛编号 *</label>
-                <input type="text" id="compNumber" placeholder="如: COMP-2026-001" required>
-            </div>
-            <div class="form-group">
-                <label>比赛名称 *</label>
-                <input type="text" id="compName" placeholder="如: 2026春季魔方赛" required>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>比赛日期 *</label>
-                    <input type="date" id="compDate" required>
+        
+        <div class="content">
+            <!-- 比赛管理 -->
+            <div id="tab-competitions" class="tab-content active">
+                <h2>🏆 比赛管理</h2>
+                <div class="grid">
+                    <div>
+                        <h3>添加比赛</h3>
+                        <div class="form-group">
+                            <label>比赛编号</label>
+                            <input type="number" id="comp-number" placeholder="如：1" />
+                        </div>
+                        <div class="form-group">
+                            <label>比赛名称</label>
+                            <input type="text" id="comp-name" placeholder="如：2026春季赛" />
+                        </div>
+                        <div class="form-group">
+                            <label>比赛日期</label>
+                            <input type="date" id="comp-date" />
+                        </div>
+                        <div class="form-group">
+                            <label>地点</label>
+                            <input type="text" id="comp-location" placeholder="如：北京" />
+                        </div>
+                        <div class="form-group">
+                            <label>备注</label>
+                            <textarea id="comp-notes" rows="3"></textarea>
+                        </div>
+                        <button class="btn" onclick="addCompetition()">➕ 添加比赛</button>
+                    </div>
+                    <div>
+                        <h3>比赛列表</h3>
+                        <div id="competitions-table"></div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>比赛地点</label>
-                    <input type="text" id="compLocation" placeholder="如: 北京">
-                </div>
             </div>
-            <div class="form-group">
-                <label>主办方</label>
-                <input type="text" id="compOrganizer" placeholder="如: 中国魔方协会">
-            </div>
-            <div class="form-group">
-                <label>比赛描述</label>
-                <textarea id="compDescription" placeholder="比赛详情..."></textarea>
-            </div>
-            <button class="btn btn-success" onclick="addCompetition()">✅ 添加比赛</button>
-        </div>
-
-        <!-- 添加成绩面板 -->
-        <div id="attemptPanel" class="panel">
-            <h2 style="color: #667eea; margin-bottom: 20px;">添加比赛成绩</h2>
-            <div id="attemptMessage"></div>
             
-            <div class="form-group">
-                <label>选择比赛 *</label>
-                <select id="attemptCompetition">
-                    <option value="">-- 请先选择比赛 --</option>
-                </select>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>选手名称 *</label>
-                    <input type="text" id="participantName" placeholder="如: 张三" required>
-                </div>
-                <div class="form-group">
-                    <label>尝试序号 *</label>
-                    <input type="number" id="attemptIndex" placeholder="第几次尝试 (1,2,3...)" min="1" required>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>魔方类型 *</label>
-                    <select id="cubeType" onchange="toggleSmartFields()">
-                        <option value="non_smart">非智能魔方</option>
-                        <option value="smart">智能魔方</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>魔方型号/名称</label>
-                    <input type="text" id="cubeName" placeholder="如: 魔域智能魔方 / GAN12">
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>魔方类别</label>
-                <input type="text" id="cubeCategory" placeholder="如: 3x3, 2x2, Pyraminx">
-            </div>
-
-            <div class="form-group">
-                <label>打乱公式 *</label>
-                <textarea id="scramble" placeholder="如: R U R' U' R U R' U'..." required></textarea>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>复原时间 (秒) *</label>
-                    <input type="number" id="solveTime" step="0.001" placeholder="如: 12.345" required>
-                </div>
-                <div class="form-group">
-                    <label>惩罚</label>
-                    <select id="penalty">
-                        <option value="none">无惩罚</option>
-                        <option value="plus_two">+2 秒</option>
-                        <option value="dnf">DNF (未完成)</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- 智能魔方专属字段 -->
-            <div id="smartFields" class="smart-fields" style="display: none;">
-                <h3>🤖 智能魔方数据</h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>步数 *</label>
-                        <input type="number" id="moveCount" placeholder="如: 45">
+            <!-- 项目管理 -->
+            <div id="tab-events" class="tab-content">
+                <h2>🎯 项目管理</h2>
+                <div class="grid">
+                    <div>
+                        <h3>添加项目</h3>
+                        <div class="form-group">
+                            <label>项目代码</label>
+                            <input type="text" id="event-code" placeholder="如：3x3" />
+                        </div>
+                        <div class="form-group">
+                            <label>项目名称</label>
+                            <input type="text" id="event-name" placeholder="如：三阶魔方" />
+                        </div>
+                        <div class="form-group">
+                            <label>描述</label>
+                            <textarea id="event-desc" rows="3"></textarea>
+                        </div>
+                        <button class="btn" onclick="addEvent()">➕ 添加项目</button>
                     </div>
-                    <div class="form-group">
-                        <label>TPS (步/秒) *</label>
-                        <input type="number" id="tps" step="0.01" placeholder="如: 3.65">
+                    <div>
+                        <h3>项目列表</h3>
+                        <div id="events-table"></div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>复原步骤详情 (JSON)</label>
-                    <textarea id="solveSteps" placeholder='{"moves": ["R", "U", "R'", ...], "phases": [...]}...'></textarea>
-                    <div class="help-text">可选，记录每一步的详细信息（JSON格式）</div>
+            </div>
+            
+            <!-- 选手管理 -->
+            <div id="tab-participants" class="tab-content">
+                <h2>👤 选手管理</h2>
+                <div class="grid">
+                    <div>
+                        <h3>添加选手</h3>
+                        <div class="form-group">
+                            <label>选手名称</label>
+                            <input type="text" id="participant-name" placeholder="如：张三" />
+                        </div>
+                        <div class="form-group">
+                            <label>WCA ID（可选）</label>
+                            <input type="text" id="participant-wca" placeholder="如：2026ZSAN01" />
+                        </div>
+                        <button class="btn" onclick="addParticipant()">➕ 添加选手</button>
+                    </div>
+                    <div>
+                        <h3>选手列表</h3>
+                        <div id="participants-table"></div>
+                    </div>
                 </div>
             </div>
-
-            <!-- 非智能魔方可选字段 -->
-            <div id="nonSmartFields">
-                <div class="form-group">
-                    <label>录像链接 (非智能魔方可选)</label>
-                    <input type="text" id="videoUrl" placeholder="https://... (用于复盘分析)">
+            
+            <!-- 成绩录入 -->
+            <div id="tab-attempts" class="tab-content">
+                <h2>📝 成绩录入</h2>
+                <div class="grid">
+                    <div>
+                        <h3>录入成绩</h3>
+                        <div class="form-group">
+                            <label>选择比赛</label>
+                            <select id="attempt-competition" onchange="loadCompetitionEventsForAttempt()"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>选择项目</label>
+                            <select id="attempt-event"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>选择选手</label>
+                            <select id="attempt-participant"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>尝试次数</label>
+                            <input type="number" id="attempt-number" value="1" min="1" />
+                        </div>
+                        <div class="form-group">
+                            <label>魔方类型</label>
+                            <select id="attempt-cube-type" onchange="toggleSmartFields()">
+                                <option value="smart">智能魔方</option>
+                                <option value="non_smart">非智能魔方</option>
+                            </select>
+                        </div>
+                        
+                        <div id="smart-fields" class="smart-fields">
+                            <h4>📡 智能魔方数据</h4>
+                            <div class="form-group">
+                                <label>步数</label>
+                                <input type="number" id="attempt-moves" placeholder="如：45" />
+                            </div>
+                            <div class="form-group">
+                                <label>TPS（步/秒）</label>
+                                <input type="number" id="attempt-tps" step="0.01" placeholder="如：2.5" />
+                            </div>
+                            <div class="form-group">
+                                <label>复原步骤（JSON）</label>
+                                <textarea id="attempt-steps" rows="3" placeholder='[{"move":"R","time":0.5,"comment":"// Cross"}]'></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>步骤注释（C++ 格式）</label>
+                                <textarea id="attempt-comments" rows="3" placeholder="// Cross&#10;// F2L pair 1&#10;// OLL&#10;// PLL"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div id="non-smart-fields" class="non-smart-fields" style="display:none;">
+                            <h4>📹 非智能魔方</h4>
+                            <div class="form-group">
+                                <label>录像链接（可选）</label>
+                                <input type="text" id="attempt-video" placeholder="https://..." />
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>复原时间（秒）</label>
+                            <input type="number" id="attempt-time" step="0.001" placeholder="如：8.234" />
+                        </div>
+                        <div class="form-group">
+                            <label>打乱公式</label>
+                            <textarea id="attempt-scramble" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="attempt-dnf" /> DNF（未完成）
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="attempt-plus-two" /> +2 秒
+                            </label>
+                        </div>
+                        <button class="btn btn-success" onclick="addAttempt()">✅ 提交成绩</button>
+                    </div>
+                    <div>
+                        <h3>最近成绩</h3>
+                        <div id="attempts-table"></div>
+                    </div>
                 </div>
             </div>
-
-            <div class="form-group">
-                <label>备注</label>
-                <textarea id="attemptNotes" placeholder="其他备注信息..."></textarea>
+            
+            <!-- 查看数据 -->
+            <div id="tab-view" class="tab-content">
+                <h2>📊 查看数据</h2>
+                <div class="form-group">
+                    <label>选择比赛</label>
+                    <select id="view-competition" onchange="loadCompetitionEventsForView()"></select>
+                </div>
+                <div class="form-group">
+                    <label>选择项目</label>
+                    <select id="view-event" onchange="loadViewData()"></select>
+                </div>
+                <div id="view-table"></div>
             </div>
-
-            <button class="btn btn-success" onclick="addAttempt()">✅ 添加成绩</button>
-        </div>
-
-        <!-- 查看数据面板 -->
-        <div id="viewPanel" class="panel">
-            <h2 style="color: #667eea; margin-bottom: 20px;">查看数据</h2>
-            <div style="margin-bottom: 20px;">
-                <button class="btn btn-primary" onclick="loadCompetitions()">📅 加载比赛列表</button>
-                <button class="btn btn-primary" onclick="loadAttempts()">🎯 加载成绩记录</button>
-                <button class="btn btn-primary" onclick="loadStats()">📊 加载统计</button>
-            </div>
-            <div id="viewMessage"></div>
-            <div id="dataPreview" class="data-preview" style="display: none;">
-                <pre id="dataContent"></pre>
+            
+            <!-- 统计分析 -->
+            <div id="tab-stats" class="tab-content">
+                <h2>📈 统计分析</h2>
+                <div class="form-group">
+                    <label>选择选手</label>
+                    <select id="stats-participant" onchange="loadStats()"></select>
+                </div>
+                <div class="form-group">
+                    <label>选择项目</label>
+                    <select id="stats-event" onchange="loadStats()"></select>
+                </div>
+                
+                <div id="stats-cards" class="stats-grid"></div>
+                
+                <h3>📊 成绩分布（Gamma 拟合）</h3>
+                <div class="chart-container">
+                    <canvas id="gamma-chart"></canvas>
+                </div>
+                
+                <h3>🎯 MLE 预测</h3>
+                <div id="mle-prediction" class="alert alert-info"></div>
+                
+                <h3>📋 详细统计</h3>
+                <div id="stats-table"></div>
             </div>
         </div>
     </div>
-
+    
     <script>
         // 使用 dbClient 避免和 CDN 全局变量 window.supabase 冲突
         var dbClient = null;
-        let isConnected = false;
-
-        // 连接 Supabase
-        async function connectSupabase() {
-            const url = document.getElementById('supabaseUrl').value.trim();
-            const key = document.getElementById('supabaseKey').value.trim();
-
-            if (!url || !key) {
-                showMessage('competitionMessage', '请填写完整的 Supabase URL 和 Key', 'error');
-                return;
-            }
-
+        
+        // Tabulator 表格实例
+        var competitionsTable = null;
+        var eventsTable = null;
+        var participantsTable = null;
+        var attemptsTable = null;
+        var viewTable = null;
+        var statsTable = null;
+        
+        // Chart.js 实例
+        var gammaChart = null;
+        
+        // 显示提示
+        function showAlert(message, type) {
+            var alertBox = document.getElementById('alertBox');
+            alertBox.className = 'alert alert-' + type;
+            alertBox.textContent = message;
+            alertBox.style.display = 'block';
+            setTimeout(function() { alertBox.style.display = 'none'; }, 5000);
+        }
+        
+        // 连接数据库
+        async function connectDB() {
+            var url = document.getElementById('supabaseUrl').value.trim();
+            var key = document.getElementById('supabaseKey').value.trim();
+            if (!url || !key) { showAlert('请填写 Supabase URL 和 Key', 'error'); return; }
             try {
                 dbClient = window.supabase.createClient(url, key);
-                
                 // 测试连接
-                const { data, error } = await dbClient.from('competitions').select('count').limit(1);
-                
+                var { data, error } = await dbClient.from('competitions').select('count').limit(1);
                 if (error) throw error;
-                
-                isConnected = true;
-                document.getElementById('connectionStatus').innerHTML = 
-                    '<span class="status-indicator connected"></span><span style="color: #48bb78; font-weight: 600;">已连接</span>';
-                
-                showMessage('competitionMessage', '🎉 成功连接到数据库！', 'success');
-                
-                // 加载比赛列表
-                loadCompetitionsForSelect();
-            } catch (error) {
-                isConnected = false;
-                document.getElementById('connectionStatus').innerHTML = 
-                    '<span class="status-indicator disconnected"></span><span style="color: #f56565; font-weight: 600;">连接失败</span>';
-                showMessage('competitionMessage', '连接失败: ' + error.message, 'error');
+                showAlert('✅ 数据库连接成功！', 'success');
+                localStorage.setItem('supabase_url', url);
+                localStorage.setItem('supabase_key', key);
+                loadAllData();
+            } catch (e) {
+                showAlert('❌ 连接失败：' + e.message, 'error');
             }
         }
-
-        // 切换智能魔方字段显示
-        function toggleSmartFields() {
-            const cubeType = document.getElementById('cubeType').value;
-            const smartFields = document.getElementById('smartFields');
-            const nonSmartFields = document.getElementById('nonSmartFields');
-            
-            if (cubeType === 'smart') {
-                smartFields.style.display = 'block';
-                nonSmartFields.style.display = 'none';
-            } else {
-                smartFields.style.display = 'none';
-                nonSmartFields.style.display = 'block';
-            }
-        }
-
+        
         // 切换标签页
         function switchTab(tabName) {
-            // 更新标签样式
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            var tabs = document.querySelectorAll('.tab');
+            tabs.forEach(function(t) { t.classList.remove('active'); });
             event.target.classList.add('active');
-
-            // 更新面板显示
-            document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
-            document.getElementById(tabName + 'Panel').classList.add('active');
+            var contents = document.querySelectorAll('.tab-content');
+            contents.forEach(function(c) { c.classList.remove('active'); });
+            document.getElementById('tab-' + tabName).classList.add('active');
         }
-
-        // 显示消息
-        function showMessage(elementId, message, type) {
-            const element = document.getElementById(elementId);
-            element.innerHTML = `<div class="message ${type}">${message}</div>`;
-            setTimeout(() => element.innerHTML = '', 5000);
+        
+        // 切换智能/非智能魔方字段
+        function toggleSmartFields() {
+            var type = document.getElementById('attempt-cube-type').value;
+            document.getElementById('smart-fields').style.display = type === 'smart' ? 'block' : 'none';
+            document.getElementById('non-smart-fields').style.display = type === 'non_smart' ? 'block' : 'none';
         }
-
-        // 添加比赛
-        async function addCompetition() {
-            if (!isConnected) {
-                showMessage('competitionMessage', '请先连接数据库！', 'error');
-                return;
-            }
-
-            const compNumber = document.getElementById('compNumber').value.trim();
-            const compName = document.getElementById('compName').value.trim();
-            const compDate = document.getElementById('compDate').value;
-            const compLocation = document.getElementById('compLocation').value.trim();
-            const compOrganizer = document.getElementById('compOrganizer').value.trim();
-            const compDescription = document.getElementById('compDescription').value.trim();
-
-            if (!compNumber || !compName || !compDate) {
-                showMessage('competitionMessage', '请填写必填字段（编号、名称、日期）', 'error');
-                return;
-            }
-
-            try {
-                const { data, error } = await dbClient
-                    .from('competitions')
-                    .insert([{
-                        competition_number: compNumber,
-                        name: compName,
-                        competition_date: compDate,
-                        location: compLocation || null,
-                        organizer: compOrganizer || null,
-                        description: compDescription || null
-                    }])
-                    .select();
-
-                if (error) throw error;
-
-                showMessage('competitionMessage', `✅ 比赛添加成功！ID: ${data[0].id}`, 'success');
-                
-                // 清空表单
-                document.getElementById('compNumber').value = '';
-                document.getElementById('compName').value = '';
-                document.getElementById('compDate').value = '';
-                document.getElementById('compLocation').value = '';
-                document.getElementById('compOrganizer').value = '';
-                document.getElementById('compDescription').value = '';
-
-                // 重新加载比赛列表
-                loadCompetitionsForSelect();
-            } catch (error) {
-                if (error.code === '23505') {
-                    showMessage('competitionMessage', '❌ 比赛编号已存在！请使用不同的编号。', 'error');
-                } else {
-                    showMessage('competitionMessage', '❌ 添加失败: ' + error.message, 'error');
-                }
-            }
+        
+        // 加载所有数据
+        async function loadAllData() {
+            if (!dbClient) return;
+            await Promise.all([
+                loadCompetitions(),
+                loadEvents(),
+                loadParticipants(),
+                loadCompetitionsForSelect('view-competition'),
+                loadCompetitionsForSelect('attempt-competition'),
+                loadParticipantsForSelect('stats-participant')
+            ]);
         }
-
-        // 为下拉列表加载比赛
-        async function loadCompetitionsForSelect() {
-            if (!isConnected) return;
-
-            try {
-                const { data, error } = await dbClient
-                    .from('competitions')
-                    .select('id, competition_number, name')
-                    .order('competition_date', { ascending: false });
-
-                if (error) throw error;
-
-                const select = document.getElementById('attemptCompetition');
-                select.innerHTML = '<option value="">-- 请选择比赛 --</option>';
-                
-                data.forEach(comp => {
-                    const option = document.createElement('option');
-                    option.value = comp.id;
-                    option.textContent = `${comp.competition_number} - ${comp.name}`;
-                    select.appendChild(option);
-                });
-            } catch (error) {
-                console.error('加载比赛列表失败:', error);
-            }
-        }
-
-        // 添加成绩
-        async function addAttempt() {
-            if (!isConnected) {
-                showMessage('attemptMessage', '请先连接数据库！', 'error');
-                return;
-            }
-
-            const competitionId = document.getElementById('attemptCompetition').value;
-            const participantName = document.getElementById('participantName').value.trim();
-            const attemptIndex = parseInt(document.getElementById('attemptIndex').value);
-            const cubeType = document.getElementById('cubeType').value;
-            const cubeName = document.getElementById('cubeName').value.trim();
-            const cubeCategory = document.getElementById('cubeCategory').value.trim();
-            const scramble = document.getElementById('scramble').value.trim();
-            const solveTime = parseFloat(document.getElementById('solveTime').value);
-            const penalty = document.getElementById('penalty').value;
-            const notes = document.getElementById('attemptNotes').value.trim();
-
-            if (!competitionId || !participantName || !attemptIndex || !scramble || !solveTime) {
-                showMessage('attemptMessage', '请填写所有必填字段', 'error');
-                return;
-            }
-
-            // 生成唯一编号
-            const attemptNumber = `${document.querySelector(`#attemptCompetition option[value="${competitionId}"]`).textContent.split(' - ')[0]}-ATT-${String(attemptIndex).padStart(3, '0')}`;
-
-            // 构建数据对象
-            const attemptData = {
-                attempt_number: attemptNumber,
-                competition_id: competitionId,
-                participant_name: participantName,
-                attempt_index: attemptIndex,
-                cube_type: cubeType,
-                cube_name: cubeName || null,
-                cube_category: cubeCategory || null,
-                scramble: scramble,
-                solve_time: solveTime,
-                is_dnf: penalty === 'dnf',
-                is_plus_two: penalty === 'plus_two',
-                notes: notes || null
-            };
-
-            // 智能魔方专属数据
-            if (cubeType === 'smart') {
-                const moveCount = document.getElementById('moveCount').value;
-                const tps = document.getElementById('tps').value;
-                const solveSteps = document.getElementById('solveSteps').value.trim();
-
-                if (!moveCount || !tps) {
-                    showMessage('attemptMessage', '智能魔方必须填写步数和 TPS！', 'error');
-                    return;
-                }
-
-                attemptData.move_count = parseInt(moveCount);
-                attemptData.tps = parseFloat(tps);
-                
-                if (solveSteps) {
-                    try {
-                        attemptData.solve_steps = JSON.parse(solveSteps);
-                    } catch (e) {
-                        showMessage('attemptMessage', '复原步骤 JSON 格式错误！', 'error');
-                        return;
-                    }
-                }
-            } else {
-                // 非智能魔方
-                const videoUrl = document.getElementById('videoUrl').value.trim();
-                if (videoUrl) {
-                    attemptData.video_url = videoUrl;
-                }
-            }
-
-            try {
-                const { data, error } = await dbClient
-                    .from('attempts')
-                    .insert([attemptData])
-                    .select();
-
-                if (error) throw error;
-
-                showMessage('attemptMessage', `✅ 成绩添加成功！编号: ${attemptData.attempt_number}`, 'success');
-                
-                // 清空表单（保留比赛选择）
-                document.getElementById('participantName').value = '';
-                document.getElementById('attemptIndex').value = '';
-                document.getElementById('cubeName').value = '';
-                document.getElementById('cubeCategory').value = '';
-                document.getElementById('scramble').value = '';
-                document.getElementById('solveTime').value = '';
-                document.getElementById('penalty').value = 'none';
-                document.getElementById('moveCount').value = '';
-                document.getElementById('tps').value = '';
-                document.getElementById('solveSteps').value = '';
-                document.getElementById('videoUrl').value = '';
-                document.getElementById('attemptNotes').value = '';
-            } catch (error) {
-                if (error.code === '23505') {
-                    showMessage('attemptMessage', '❌ 尝试编号已存在！请检查尝试序号。', 'error');
-                } else {
-                    showMessage('attemptMessage', '❌ 添加失败: ' + error.message, 'error');
-                }
-            }
-        }
-
+        
         // 加载比赛列表
         async function loadCompetitions() {
-            if (!isConnected) {
-                showMessage('viewMessage', '请先连接数据库！', 'error');
-                return;
+            var { data, error } = await dbClient.from('competitions').select('*').order('competition_number');
+            if (error) { showAlert('加载比赛失败：' + error.message, 'error'); return; }
+            if (competitionsTable) competitionsTable.destroy();
+            competitionsTable = new Tabulator('#competitions-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '编号', field: 'competition_number', width: 80 },
+                    { title: '名称', field: 'name' },
+                    { title: '日期', field: 'competition_date', formatter: function(cell) { return cell.getValue() ? cell.getValue().split('T')[0] : ''; } },
+                    { title: '地点', field: 'location' },
+                    { title: '操作', formatter: function() { return '<button class="btn btn-danger" style="padding:5px 10px;">删除</button>'; }, cellClick: function(e, cell) { deleteCompetition(cell.getRow().getData().id); } }
+                ]
+            });
+        }
+        
+        // 添加比赛
+        async function addCompetition() {
+            var num = document.getElementById('comp-number').value;
+            var name = document.getElementById('comp-name').value.trim();
+            var date = document.getElementById('comp-date').value;
+            if (!num || !name || !date) { showAlert('请填写完整信息', 'error'); return; }
+            var { error } = await dbClient.from('competitions').insert({
+                competition_number: parseInt(num),
+                name: name,
+                competition_date: date,
+                location: document.getElementById('comp-location').value.trim(),
+                notes: document.getElementById('comp-notes').value.trim()
+            });
+            if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+            showAlert('✅ 比赛添加成功！', 'success');
+            loadCompetitions();
+        }
+        
+        // 加载项目列表
+        async function loadEvents() {
+            var { data, error } = await dbClient.from('events').select('*').order('event_code');
+            if (error) return;
+            if (eventsTable) eventsTable.destroy();
+            eventsTable = new Tabulator('#events-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '代码', field: 'event_code', width: 100 },
+                    { title: '名称', field: 'event_name' },
+                    { title: '描述', field: 'description' }
+                ]
+            });
+        }
+        
+        // 添加项目
+        async function addEvent() {
+            var code = document.getElementById('event-code').value.trim();
+            var name = document.getElementById('event-name').value.trim();
+            if (!code || !name) { showAlert('请填写代码和名称', 'error'); return; }
+            var { error } = await dbClient.from('events').insert({
+                event_code: code,
+                event_name: name,
+                description: document.getElementById('event-desc').value.trim()
+            });
+            if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+            showAlert('✅ 项目添加成功！', 'success');
+            loadEvents();
+        }
+        
+        // 加载选手列表
+        async function loadParticipants() {
+            var { data, error } = await dbClient.from('participants').select('*').order('name');
+            if (error) return;
+            if (participantsTable) participantsTable.destroy();
+            participantsTable = new Tabulator('#participants-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '名称', field: 'name' },
+                    { title: 'WCA ID', field: 'wca_id' },
+                    { title: '备注', field: 'notes' }
+                ]
+            });
+        }
+        
+        // 添加选手
+        async function addParticipant() {
+            var name = document.getElementById('participant-name').value.trim();
+            if (!name) { showAlert('请填写选手名称', 'error'); return; }
+            var { error } = await dbClient.from('participants').insert({
+                name: name,
+                wca_id: document.getElementById('participant-wca').value.trim()
+            });
+            if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+            showAlert('✅ 选手添加成功！', 'success');
+            loadParticipants();
+        }
+        
+        // 加载比赛到下拉框
+        async function loadCompetitionsForSelect(selectId) {
+            var { data } = await dbClient.from('competitions').select('*').order('competition_number');
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择比赛 --</option>';
+            (data || []).forEach(function(c) {
+                sel.innerHTML += '<option value="' + c.id + '">' + c.competition_number + ' - ' + c.name + '</option>';
+            });
+        }
+        
+        // 加载选手到下拉框
+        async function loadParticipantsForSelect(selectId) {
+            var { data } = await dbClient.from('participants').select('*').order('name');
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择选手 --</option>';
+            (data || []).forEach(function(p) {
+                sel.innerHTML += '<option value="' + p.id + '">' + p.name + '</option>';
+            });
+        }
+        
+        // 提交成绩（完整实现）
+        async function addAttempt() {
+            var competitionId = document.getElementById('attempt-competition').value;
+            var eventId = document.getElementById('attempt-event').value;
+            var participantId = document.getElementById('attempt-participant').value;
+            if (!competitionId || !eventId || !participantId) {
+                showAlert('请选择比赛、项目和选手', 'error'); return;
             }
-
-            try {
-                const { data, error } = await dbClient
-                    .from('competitions')
-                    .select('*')
-                    .order('competition_date', { ascending: false });
-
-                if (error) throw error;
-
-                displayData(data);
-                showMessage('viewMessage', `✅ 成功加载 ${data.length} 条比赛记录`, 'success');
-            } catch (error) {
-                showMessage('viewMessage', '❌ 加载失败: ' + error.message, 'error');
+            // 1. 查找或创建 competition_events 记录
+            var { data: ceData, error: ceError } = await dbClient
+                .from('competition_events')
+                .select('id')
+                .eq('competition_id', competitionId)
+                .eq('event_id', eventId)
+                .maybeSingle();
+            if (ceError) { showAlert('查询比赛项目失败：' + ceError.message, 'error'); return; }
+            var ceId = ceData ? ceData.id : null;
+            if (!ceId) {
+                // 获取当前比赛的最大 event_number
+                var { data: maxData } = await dbClient
+                    .from('competition_events')
+                    .select('event_number')
+                    .eq('competition_id', competitionId)
+                    .order('event_number', { ascending: false })
+                    .limit(1);
+                var nextNum = (maxData && maxData.length > 0) ? maxData[0].event_number + 1 : 1;
+                var { data: newCe, error: insertError } = await dbClient
+                    .from('competition_events')
+                    .insert({ competition_id: competitionId, event_id: eventId, event_number: nextNum })
+                    .select('id')
+                    .single();
+                if (insertError) { showAlert('创建比赛项目关联失败：' + insertError.message, 'error'); return; }
+                ceId = newCe.id;
+            }
+            // 2. 收集表单数据
+            var attemptNum = parseInt(document.getElementById('attempt-number').value) || 1;
+            var cubeType = document.getElementById('attempt-cube-type').value;
+            var solveTime = parseFloat(document.getElementById('attempt-time').value) || null;
+            var isDnf = document.getElementById('attempt-dnf').checked;
+            var isPlusTwo = document.getElementById('attempt-plus-two').checked;
+            if (!isDnf && solveTime === null) { showAlert('请输入复原时间或勾选 DNF', 'error'); return; }
+            var attemptData = {
+                competition_event_id: ceId,
+                participant_id: participantId,
+                attempt_number: attemptNum,
+                solve_time: isDnf ? null : solveTime,
+                cube_type: cubeType,
+                scramble: document.getElementById('attempt-scramble').value.trim(),
+                is_dnf: isDnf,
+                is_plus_two: isPlusTwo,
+                notes: ''
+            };
+            if (cubeType === 'smart') {
+                attemptData.move_count = parseInt(document.getElementById('attempt-moves').value) || null;
+                attemptData.tps = parseFloat(document.getElementById('attempt-tps').value) || null;
+                var stepsText = document.getElementById('attempt-steps').value.trim();
+                if (stepsText) {
+                    try { attemptData.solve_steps = JSON.parse(stepsText); } catch(e) {}
+                }
+                attemptData.step_comments = document.getElementById('attempt-comments').value.trim();
+            } else {
+                attemptData.video_url = document.getElementById('attempt-video').value.trim();
+            }
+            // 3. 插入数据库
+            var { error: insertError } = await dbClient.from('attempts').insert(attemptData);
+            if (insertError) { showAlert('提交成绩失败：' + insertError.message, 'error'); return; }
+            showAlert('✅ 成绩提交成功！', 'success');
+            // 4. 刷新最近成绩表格
+            loadRecentAttempts();
+            // 5. 清空表单
+            document.getElementById('attempt-time').value = '';
+            document.getElementById('attempt-scramble').value = '';
+            document.getElementById('attempt-dnf').checked = false;
+            document.getElementById('attempt-plus-two').checked = false;
+            if (cubeType === 'smart') {
+                document.getElementById('attempt-moves').value = '';
+                document.getElementById('attempt-tps').value = '';
+                document.getElementById('attempt-steps').value = '';
+                document.getElementById('attempt-comments').value = '';
+            } else {
+                document.getElementById('attempt-video').value = '';
             }
         }
-
-        // 加载成绩记录
-        async function loadAttempts() {
-            if (!isConnected) {
-                showMessage('viewMessage', '请先连接数据库！', 'error');
+        
+        // 加载最近成绩
+        async function loadRecentAttempts() {
+            var { data, error } = await dbClient
+                .from('attempts')
+                .select('*, participants(name), competition_events(competitions(name), events(event_name))')
+                .order('created_at', { ascending: false })
+                .limit(50);
+            if (error) return;
+            if (attemptsTable) attemptsTable.destroy();
+            attemptsTable = new Tabulator('#attempts-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '选手', field: 'participants.name' },
+                    { title: '项目', field: 'competition_events.events.event_name' },
+                    { title: '比赛', field: 'competition_events.competitions.name' },
+                    { title: '次数', field: 'attempt_number', width: 80 },
+                    { title: '时间', formatter: function(cell) {
+                        var row = cell.getRow().getData();
+                        if (row.is_dnf) return 'DNF';
+                        if (!row.solve_time) return '-';
+                        return row.solve_time + (row.is_plus_two ? '+' : '');
+                    }},
+                    { title: '魔方', field: 'cube_type', width: 100 },
+                    { title: 'TPS', field: 'tps', width: 80 }
+                ]
+            });
+        }
+        
+        // 加载查看数据（完整实现）
+        async function loadViewData() {
+            var competitionId = document.getElementById('view-competition').value;
+            var eventId = document.getElementById('view-event').value;
+            if (!competitionId || !eventId) {
+                document.getElementById('view-table').innerHTML = '<p class="loading">请选择比赛和项目</p>';
                 return;
             }
-
-            try {
-                const { data, error } = await dbClient
-                    .from('attempts')
-                    .select(`
-                        *,
-                        competitions (competition_number, name)
-                    `)
-                    .order('created_at', { ascending: false })
-                    .limit(100);
-
-                if (error) throw error;
-
-                displayData(data);
-                showMessage('viewMessage', `✅ 成功加载 ${data.length} 条成绩记录`, 'success');
-            } catch (error) {
-                showMessage('viewMessage', '❌ 加载失败: ' + error.message, 'error');
-            }
+            // 1. 查找 competition_event_id
+            var { data: ceData, error: ceError } = await dbClient
+                .from('competition_events')
+                .select('id')
+                .eq('competition_id', competitionId)
+                .eq('event_id', eventId)
+                .single();
+            if (ceError) { showAlert('查询失败：' + ceError.message, 'error'); return; }
+            // 2. 查询成绩
+            var { data, error } = await dbClient
+                .from('attempts')
+                .select('*, participants(name)')
+                .eq('competition_event_id', ceData.id)
+                .order('attempt_number');
+            if (error) { showAlert('加载数据失败：' + error.message, 'error'); return; }
+            // 3. 用 Tabulator 显示
+            if (viewTable) viewTable.destroy();
+            viewTable = new Tabulator('#view-table', {
+                data: data,
+                layout: 'fitColumns',
+                columns: [
+                    { title: '选手', field: 'participants.name' },
+                    { title: '次数', field: 'attempt_number', width: 80 },
+                    { title: '时间', formatter: function(cell) {
+                        var row = cell.getRow().getData();
+                        if (row.is_dnf) return 'DNF';
+                        if (!row.solve_time) return '-';
+                        return row.solve_time + (row.is_plus_two ? '+' : '');
+                    }},
+                    { title: '魔方类型', field: 'cube_type', width: 100 },
+                    { title: '步数', field: 'move_count', width: 80 },
+                    { title: 'TPS', field: 'tps', width: 80 },
+                    { title: '打乱', field: 'scramble', width: 150 },
+                    { title: '备注', formatter: function(cell) {
+                        var row = cell.getRow().getData();
+                        return row.is_dnf ? 'DNF' : (row.is_plus_two ? '+2' : '');
+                    }, width: 80 }
+                ]
+            });
         }
+        
+        // 加载项目和事件下拉框（辅助函数）
+        async function loadEventsForSelect(selectId) {
+            var { data } = await dbClient.from('events').select('*').order('event_code');
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择项目 --</option>';
+            (data || []).forEach(function(e) {
+                sel.innerHTML += '<option value="' + e.id + '">' + e.event_code + ' - ' + e.event_name + '</option>';
+            });
+        }
+        
+        // 加载比赛中的项目（根据选择的比赛动态更新项目下拉框）
+        async function loadCompetitionEvents(competitionId, selectId) {
+            if (!competitionId) {
+                document.getElementById(selectId).innerHTML = '<option value="">-- 先选择比赛 --</option>';
+                return;
+            }
+            var { data } = await dbClient
+                .from('competition_events')
+                .select('*, events(*)')
+                .eq('competition_id', competitionId);
+            var sel = document.getElementById(selectId);
+            sel.innerHTML = '<option value="">-- 选择项目 --</option>';
+            (data || []).forEach(function(ce) {
+                sel.innerHTML += '<option value="' + ce.event_id + '">' + ce.events.event_code + ' - ' + ce.events.event_name + '</option>';
+            });
+        }
+        
+        // 修改 loadAllData 添加加载项目下拉框
+        // （已在上方重新定义 loadAllData，此处删除重复）
 
-        // 加载统计
+        
+        // 加载统计分析（完整实现）
         async function loadStats() {
-            if (!isConnected) {
-                showMessage('viewMessage', '请先连接数据库！', 'error');
+            var participantId = document.getElementById('stats-participant').value;
+            var eventId = document.getElementById('stats-event').value;
+            if (!participantId || !eventId) {
+                document.getElementById('stats-cards').innerHTML = '';
+                document.getElementById('mle-prediction').innerHTML = '请选择选手和项目';
                 return;
             }
-
-            try {
-                const { data: compStats, error: compError } = await dbClient
-                    .from('competition_stats')
-                    .select('*');
-
-                if (compError) throw compError;
-
-                const { data: partStats, error: partError } = await dbClient
-                    .from('participant_stats')
-                    .select('*');
-
-                if (partError) throw partError;
-
-                const stats = {
-                    competition_stats: compStats,
-                    participant_stats: partStats
-                };
-
-                displayData(stats);
-                showMessage('viewMessage', `✅ 成功加载统计数据`, 'success');
-            } catch (error) {
-                showMessage('viewMessage', '❌ 加载失败: ' + error.message, 'error');
+            // 1. 获取该选手在该项目的所有有效成绩
+            var { data: attempts, error } = await dbClient
+                .from('attempts')
+                .select('*, competition_events!inner(*)')
+                .eq('participant_id', participantId)
+                .eq('competition_events.event_id', eventId)
+                .eq('is_dnf', false)
+                .not('solve_time', 'is', null)
+                .order('created_at');
+            if (error) { showAlert('加载成绩失败：' + error.message, 'error'); return; }
+            if (!attempts || attempts.length === 0) {
+                document.getElementById('mle-prediction').innerHTML = '暂无有效成绩';
+                return;
             }
+            // 2. 计算统计数据
+            var times = attempts.map(a => a.solve_time);
+            var single = Math.min(...times);
+            var currentAvg = times.reduce((a, b) => a + b, 0) / times.length;
+            // 计算 AO5（滑动窗口）
+            var ao5List = [];
+            for (var i = 4; i < times.length; i++) {
+                var window = times.slice(i-4, i+1);
+                var sorted = window.slice().sort((a,b) => a - b);
+                var avg = (sorted[1] + sorted[2] + sorted[3]) / 3;
+                ao5List.push(avg);
+            }
+            var bestAo5 = ao5List.length > 0 ? Math.min(...ao5List) : null;
+            // 计算 AO12
+            var ao12List = [];
+            for (var i = 11; i < times.length; i++) {
+                var window = times.slice(i-11, i+1);
+                var sorted = window.slice().sort((a,b) => a - b);
+                var avg = (sorted[1] + sorted[2] + sorted[3] + sorted[4] + sorted[5] + sorted[6] + sorted[7] + sorted[8] + sorted[9] + sorted[10]) / 10;
+                ao12List.push(avg);
+            }
+            var bestAo12 = ao12List.length > 0 ? Math.min(...ao12List) : null;
+            // 3. 显示统计卡片
+            var cardsHtml = 
+                '<div class="stat-card"><h3>单次最佳</h3><div class="value">' + single.toFixed(3) + '</div></div>' +
+                '<div class="stat-card"><h3>当前平均</h3><div class="value">' + currentAvg.toFixed(3) + '</div></div>' +
+                (bestAo5 ? '<div class="stat-card"><h3>最佳 AO5</h3><div class="value">' + bestAo5.toFixed(3) + '</div></div>' : '') +
+                (bestAo12 ? '<div class="stat-card"><h3>最佳 AO12</h3><div class="value">' + bestAo12.toFixed(3) + '</div></div>' : '') +
+                '<div class="stat-card"><h3>总次数</h3><div class="value">' + times.length + '</div></div>';
+            document.getElementById('stats-cards').innerHTML = cardsHtml;
+            // 4. Gamma 分布 MLE 拟合
+            var mle = fitGammaMLE(times);
+            if (!mle) {
+                document.getElementById('mle-prediction').innerHTML = '成绩数据不足，无法拟合';
+                return;
+            }
+            var alpha = mle.alpha;
+            var beta = mle.beta;
+            var mode = (alpha > 1) ? (alpha - 1) / beta : 0;  // 众数 = 真实水平
+            var mean = alpha / beta;
+            var variance = alpha / (beta * beta);
+            // 5. 显示 MLE 预测
+            var predictionHtml = 
+                '<h4>📊 Gamma 分布参数（MLE 估计）</h4>' +
+                '<p><strong>α（形状）＝</strong> ' + alpha.toFixed(3) + '</p>' +
+                '<p><strong>β（尺度）＝</strong> ' + beta.toFixed(3) + '</p>' +
+                '<p><strong>众数（真实水平）＝</strong> ' + mode.toFixed(3) + ' 秒</p>' +
+                '<p><strong>均值＝</strong> ' + mean.toFixed(3) + ' 秒</p>' +
+                '<p><strong>标准差＝</strong> ' + Math.sqrt(variance).toFixed(3) + ' 秒</p>' +
+                '<h4>🎯 预测</h4>' +
+                '<p>下次成绩 < 10 秒的概率：～ ' + (gammaCdf(10, alpha, beta) * 100).toFixed(1) + '%</p>' +
+                '<p>下次成绩在 ' + mode.toFixed(1) + ' ± 2 秒内的概率：～ ' + ((gammaCdf(mode+2, alpha, beta) - gammaCdf(Math.max(0, mode-2), alpha, beta)) * 100).toFixed(1) + '%</p>';
+            document.getElementById('mle-prediction').innerHTML = predictionHtml;
+            // 6. 绘制 Gamma 分布图
+            drawGammaChart(times, alpha, beta);
+            // 7. 保存 MLE 预测结果到数据库
+            await dbClient.from('mle_predictions').upsert({
+                participant_id: participantId,
+                event_id: eventId,
+                alpha: alpha,
+                beta: beta,
+                mode_value: mode,
+                mean_value: mean,
+                variance_value: variance,
+                sample_size: times.length,
+                confidence_interval: JSON.stringify({ lower: mode - 2*Math.sqrt(variance), upper: mode + 2*Math.sqrt(variance) })
+            }, { onConflict: 'participant_id,event_id' });
         }
-
-        // 显示数据
-        function displayData(data) {
-            const preview = document.getElementById('dataPreview');
-            const content = document.getElementById('dataContent');
-            
-            content.textContent = JSON.stringify(data, null, 2);
-            preview.style.display = 'block';
+        
+        // ========== Gamma 分布 MLE 拟合 ==========
+        function fitGammaMLE(times) {
+            if (!times || times.length < 3) return null;
+            // 使用矩估计初始化，然后用数值优化求 MLE
+            var n = times.length;
+            var mean = times.reduce((a, b) => a + b, 0) / n;
+            var variance = times.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / n;
+            // 矩估计：alpha = mean^2 / variance, beta = mean / variance
+            var alpha0 = (mean * mean) / variance;
+            var beta0 = mean / variance;
+            // 简单数值优化（固定点迭代）
+            var alpha = alpha0;
+            var beta = beta0;
+            for (var iter = 0; iter < 100; iter++) {
+                var digammaAlpha = digamma(alpha);
+                var alphaNew = alpha - (Math.log(alpha) - digammaAlpha - Math.log(mean) + meanOfLog(times)) / (1/alpha - trigamma(alpha));
+                var betaNew = alphaNew / mean;
+                if (Math.abs(alphaNew - alpha) < 0.0001) { alpha = alphaNew; beta = betaNew; break; }
+                alpha = alphaNew;
+                beta = betaNew;
+            }
+            return { alpha: alpha, beta: beta };
         }
+        
+        // 辅助函数：digamma 函数（近似）
+        function digamma(x) {
+            if (x < 1e-6) return -1e10;
+            var result = 0;
+            while (x < 6) { result -= 1 / x; x++; }
+            var invX = 1 / x;
+            var invX2 = invX * invX;
+            return result + Math.log(x) - 0.5*invX - invX2*(1/12 - invX2*(1/120 - invX2/252));
+        }
+        
+        // 辅助函数：trigamma 函数（digamma 的导数）
+        function trigamma(x) {
+            if (x < 1e-6) return 1e10;
+            var result = 0;
+            while (x < 6) { result += 1 / (x * x); x++; }
+            var invX = 1 / x;
+            var invX2 = invX * invX;
+            return result + 0.5*invX2 + invX/ x + invX2*(1/6 - invX2*(1/30 - invX2/42));
+        }
+        
+        // 辅助函数：计算 log(times) 的均值
+        function meanOfLog(times) {
+            var sum = 0;
+            for (var i = 0; i < times.length; i++) {
+                if (times[i] > 0) sum += Math.log(times[i]);
+            }
+            return sum / times.length;
+        }
+        
+        // Gamma 分布 CDF（不完全 Gamma 函数）
+        function gammaCdf(x, alpha, beta) {
+            var z = x * beta;
+            return lowerIncompleteGamma(alpha, z);
+        }
+        
+        // 下不完全 Gamma 函数（正则化）
+        function lowerIncompleteGamma(s, x) {
+            if (x < 0) return 0;
+            if (x === 0) return 0;
+            // 使用级数展开
+            var maxIter = 200;
+            var sum = 0;
+            var term = 1 / s;
+            for (var n = 1; n <= maxIter; n++) {
+                sum += term;
+                term *= x / (s + n);
+                if (Math.abs(term) < 1e-10) break;
+            }
+            return Math.exp(-x + s*Math.log(x) - logGamma(s)) * sum;
+        }
+        
+        // Log-Gamma 函数（Lanczos 近似）
+        function logGamma(x) {
+            var coef = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+            var y = x;
+            var tmp = x + 5.5;
+            tmp -= (x + 0.5) * Math.log(tmp);
+            var ser = 1.000000000190015;
+            for (var j = 0; j <= 5; j++) ser += coef[j] / ++y;
+            return -tmp + Math.log(2.5066282746310005 * ser / x);
+        }
+        
+        // ========== 绘制 Gamma 分布图 ==========
+        function drawGammaChart(times, alpha, beta) {
+            var ctx = document.getElementById('gamma-chart').getContext('2d');
+            // 准备数据：直方图
+            var min = Math.min(...times);
+            var max = Math.max(...times);
+            var binCount = Math.min(30, Math.ceil(Math.sqrt(times.length)));
+            var binWidth = (max - min) / binCount;
+            var bins = [];
+            for (var i = 0; i < binCount; i++) {
+                bins.push({ x0: min + i*binWidth, x1: min + (i+1)*binWidth, count: 0 });
+            }
+            times.forEach(function(t) {
+                var idx = Math.floor((t - min) / binWidth);
+                if (idx >= binCount) idx = binCount - 1;
+                if (idx >= 0) bins[idx].count++;
+            });
+            // Gamma PDF 曲线
+            var mode = (alpha > 1) ? (alpha - 1) / beta : 0;
+            var chartMin = Math.max(0, mode - 4*Math.sqrt(alpha/(beta*beta)));
+            var chartMax = mode + 4*Math.sqrt(alpha/(beta*beta));
+            var curvePoints = [];
+            for (var x = chartMin; x <= chartMax; x += 0.1) {
+                var pdf = (Math.pow(beta, alpha) / Math.exp(logGamma(alpha))) * Math.pow(x, alpha-1) * Math.exp(-beta*x);
+                curvePoints.push({ x: x, y: pdf * times.length * binWidth });
+            }
+            // 销毁旧图表
+            if (gammaChart) gammaChart.destroy();
+            // 绘制新图表
+            gammaChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: bins.map(function(b) { return b.x0.toFixed(1); }),
+                    datasets: [{
+                        label: '实际成绩分布',
+                        data: bins.map(function(b) { return b.count; }),
+                        backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Gamma 拟合曲线',
+                        data: curvePoints.map(function(p) { return p.y; }),
+                        type: 'line',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: '成绩（秒）' } },
+                        y: { title: { display: true, text: '频数' }, beginAtZero: true }
+                    },
+                    plugins: {
+                        title: { display: true, text: '成绩分布（Gamma 拟合）' }
+                    }
+                }
+            });
+        }
+        
+        // 修改 loadAllData 添加加载项目下拉框
+        // （在原有 loadAllData 基础上添加）
+        // 此处通过重写实现
+        var originalLoadAllData = loadAllData;
+        loadAllData = async function() {
+            if (!dbClient) return;
+            await Promise.all([
+                loadCompetitions(),
+                loadEvents(),
+                loadParticipants(),
+                loadCompetitionsForSelect('view-competition'),
+                loadCompetitionsForSelect('attempt-competition'),
+                loadParticipantsForSelect('stats-participant'),
+                loadEventsForSelect('attempt-event'),
+                loadEventsForSelect('view-event'),
+                loadEventsForSelect('stats-event')
+            ]);
+        };
 
-        // 页面加载时自动填充保存的配置
-        window.addEventListener('load', () => {
-            const savedUrl = localStorage.getItem('supabase_url');
-            const savedKey = localStorage.getItem('supabase_key');
-
-            if (savedUrl) document.getElementById('supabaseUrl').value = savedUrl;
-            if (savedKey) document.getElementById('supabaseKey').value = savedKey;
-        });
-
-        // 保存配置到本地
-        document.getElementById('supabaseUrl').addEventListener('change', (e) => {
-            localStorage.setItem('supabase_url', e.target.value);
-        });
-
-        document.getElementById('supabaseKey').addEventListener('change', (e) => {
-            localStorage.setItem('supabase_key', e.target.value);
+        
+        // ========= 动态加载比赛项目（查看数据页） =========
+        function loadCompetitionEventsForView() {
+            var competitionId = document.getElementById('view-competition').value;
+            loadCompetitionEvents(competitionId, 'view-event');
+            document.getElementById('view-table').innerHTML = '';
+        }
+        
+        // ========= 动态加载比赛项目（成绩录入页） =========
+        function loadCompetitionEventsForAttempt() {
+            var competitionId = document.getElementById('attempt-competition').value;
+            loadCompetitionEvents(competitionId, 'attempt-event');
+        }
+        
+        // 页面加载时恢复配置
+        window.addEventListener('DOMContentLoaded', function() {
+            var url = localStorage.getItem('supabase_url');
+            var key = localStorage.getItem('supabase_key');
+            if (url && key) {
+                document.getElementById('supabaseUrl').value = url;
+                document.getElementById('supabaseKey').value = key;
+            }
         });
     </script>
 </body>
