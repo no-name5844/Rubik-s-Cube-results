@@ -143,7 +143,7 @@ CREATE TABLE participant_statistics (
     stat_definition_id UUID REFERENCES statistics_definitions(id) ON DELETE CASCADE,
     stat_value DECIMAL(10,3),                    -- 计算出的统计值
     calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    PRIMARY KEY (participant_id, event_id, stat_definition_id)
+    UNIQUE(participant_id, event_id, stat_definition_id)
 );
 
 -- ============================================
@@ -259,7 +259,8 @@ CREATE INDEX idx_mle_predictions_participant ON mle_predictions(participant_id);
 CREATE INDEX idx_mle_predictions_event ON mle_predictions(event_id);
 
 -- ============================================
--- 完成提示
+-- 13. 刷新 schema 缓存（重要！）
+-- 否则 Supabase 客户端可能找不到新建的表
 -- ============================================
+SELECT pg_notify('pgrst', 'reload schema');
 SELECT 'schema-v3 数据库初始化完成！' AS status;
-SELECT '包含：比赛、项目、成绩、统计定义、MLE预测等表' AS details;
