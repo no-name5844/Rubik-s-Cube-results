@@ -20,7 +20,7 @@ DROP TABLE IF EXISTS mle_predictions CASCADE;
 
 CREATE TABLE competitions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    competition_number INTEGER UNIQUE NOT NULL,
+    competition_number TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     competition_date DATE NOT NULL,
     location TEXT,

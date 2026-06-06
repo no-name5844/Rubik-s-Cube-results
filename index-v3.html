@@ -211,7 +211,7 @@
                         <h3>添加比赛</h3>
                         <div class="form-group">
                             <label>比赛编号</label>
-                            <input type="number" id="comp-number" placeholder="如：1" />
+                            <input type="text" id="comp-number" placeholder="如：202606-07-001" />
                         </div>
                         <div class="form-group">
                             <label>比赛名称</label>
@@ -497,11 +497,11 @@
                 data: data,
                 layout: 'fitColumns',
                 columns: [
-                    { title: '编号', field: 'competition_number', width: 80 },
-                    { title: '名称', field: 'name' },
-                    { title: '日期', field: 'competition_date', formatter: function(cell) { return cell.getValue() ? cell.getValue().split('T')[0] : ''; } },
-                    { title: '地点', field: 'location' },
-                    { title: '操作', formatter: function() { return '<button class="btn btn-danger" style="padding:5px 10px;">删除</button>'; }, cellClick: function(e, cell) { deleteCompetition(cell.getRow().getData().id); } }
+                    { title: '编号', field: 'competition_number', width: 140 },
+                    { title: '名称', field: 'name', minWidth: 150 },
+                    { title: '日期', field: 'competition_date', width: 120, formatter: function(cell) { return cell.getValue() ? cell.getValue().split('T')[0] : ''; } },
+                    { title: '地点', field: 'location', width: 120 },
+                    { title: '操作', width: 100, formatter: function() { return '<button class="btn btn-danger" style="padding:5px 10px;">删除</button>'; }, cellClick: function(e, cell) { deleteCompetition(cell.getRow().getData().id); } }
                 ]
             });
         }
@@ -513,7 +513,7 @@
             var date = document.getElementById('comp-date').value;
             if (!num || !name || !date) { showAlert('请填写完整信息', 'error'); return; }
             var { error } = await dbClient.from('competitions').insert({
-                competition_number: parseInt(num),
+                competition_number: num,
                 name: name,
                 competition_date: date,
                 location: document.getElementById('comp-location').value.trim(),
