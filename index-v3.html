@@ -1125,11 +1125,32 @@
         
         // 加载项目和事件下拉框（辅助函数）
         async function loadEventsForSelect(selectId) {
-            var { data } = await dbClient.from('events').select('*').order('event_code');
+            // 查询时关联父项目信息
+            var { data, error } = await dbClient
+                .from('events')
+                .select('*, parent:parent_event_id(event_code, event_name)')
+                .order('parent_event_id', { ascending: true })
+                .order('sort_order', { ascending: true })
+                .order('event_code', { ascending: true });
+            
             var sel = document.getElementById(selectId);
-            sel.innerHTML = '<option value="">-- 选择项目 --</option>';
+            sel.innerHTML = '<option value="">-- 请选择项目 --</option>';
+            
+            if (error) {
+                console.error('加载项目失败:', error);
+                return;
+            }
+            
             (data || []).forEach(function(e) {
-                sel.innerHTML += '<option value="' + e.id + '">' + e.event_code + ' - ' + e.event_name + '</option>';
+                var prefix = '';
+                var style = '';
+                if (e.parent_event_id) {
+                    prefix = '  ↳ ';  // 子项目缩进符号
+                    style = 'style="color: #667eea;"';
+                } else {
+                    style = 'style="font-weight: bold;"';
+                }
+                sel.innerHTML += '<option value="' + e.id + '" ' + style + '>' + prefix + e.event_code + ' - ' + e.event_name + '</option>';
             });
         }
         
