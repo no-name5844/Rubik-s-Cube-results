@@ -1,0 +1,177 @@
+/**
+ * 数据保存函数
+ * 包含所有 add* 函数
+ */
+
+// 添加比赛
+async function addCompetition() {
+    var num = document.getElementById('comp-number').value;
+    var name = document.getElementById('comp-name').value.trim();
+    var date = document.getElementById('comp-date').value;
+    if (!num || !name || !date) { showAlert('请填写完整信息', 'error'); return; }
+    var { error } = await dbClient.from('competitions').insert({
+        competition_number: num,
+        name: name,
+        competition_date: date,
+        location: document.getElementById('comp-location').value.trim(),
+        notes: document.getElementById('comp-notes').value.trim()
+    });
+    if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+    showAlert('✅ 比赛添加成功！', 'success');
+    loadCompetitions();
+}
+
+// 添加项目到比赛
+async function addEventToCompetition() {
+    var competitionId = document.getElementById('config-competition').value;
+    var eventId = document.getElementById('config-event').value;
+    if (!competitionId || !eventId) {
+        showAlert('请选择比赛和项目', 'error'); return;
+    }
+    var { data: existing } = await dbClient
+        .from('competition_events')
+        .select('id')
+        .eq('competition_id', competitionId)
+        .eq('event_id', eventId);
+    if (existing && existing.length > 0) {
+        showAlert('该项目已添加到该比赛', 'info'); return;
+    }
+    var { data: maxData } = await dbClient
+        .from('competition_events')
+        .select('event_number')
+        .eq('competition_id', competitionId)
+        .order('event_number', { ascending: false })
+        .limit(1);
+    var nextNum = (maxData && maxData.length > 0) ? maxData[0].event_number + 1 : 1;
+    var { error } = await dbClient.from('competition_events').insert({
+        competition_id: competitionId,
+        event_id: eventId,
+        event_number: nextNum
+    });
+    if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+    showAlert('✅ 项目已添加到比赛！', 'success');
+    loadConfigCompetitionEvents();
+}
+
+// 添加项目
+async function addEvent() {
+    var parentId = document.getElementById('event-parent').value || null;
+    var code = document.getElementById('event-code').value.trim();
+    var name = document.getElementById('event-name').value.trim();
+    if (!code || !name) { showAlert('请填写代码和名称', 'error'); return; }
+    
+    var algoType = document.getElementById('event-algo-type') ? 
+        document.getElementById('event-algo-type').value : 'single';
+    var algoConfig = {
+        algorithm_type: algoType,
+        is_lower_better: true,
+        trim_count: algoType === 'average' ? 1 : 0
+    };
+    var windowSize = document.getElementById('event-window-size') ? 
+        document.getElementById('event-window-size').value : null;
+    if (windowSize) algoConfig.window_size = parseInt(windowSize);
+    
+    var { error } = await dbClient.from('events').insert({
+        event_code: code,
+        event_name: name,
+        description: document.getElementById('event-desc').value.trim(),
+        parent_event_id: parentId,
+        is_sub_event: parentId !== null,
+        algorithm_config: algoConfig
+    });
+    if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+    showAlert('✅ 项目添加成功！', 'success');
+    document.getElementById('event-code').value = '';
+    document.getElementById('event-name').value = '';
+    document.getElementById('event-desc').value = '';
+    if (document.getElementById('event-parent')) {
+        document.getElementById('event-parent').value = '';
+    }
+    loadEvents();
+}
+
+// 添加选手
+async function addParticipant() {
+    var name = document.getElementById('participant-name').value.trim();
+    if (!name) { showAlert('请填写选手名称', 'error'); return; }
+    var { error } = await dbClient.from('participants').insert({
+        name: name,
+        wca_id: document.getElementById('participant-wca').value.trim()
+    });
+    if (error) { showAlert('添加失败：' + error.message, 'error'); return; }
+    showAlert('✅ 选手添加成功！', 'success');
+    loadParticipants();
+}
+
+// 提交成绩
+async function addAttempt() {
+    var competitionId = document.getElementById('attempt-competition').value;
+    var eventId = document.getElementById('attempt-event').value;
+    var participantId = document.getElementById('attempt-participant').value;
+    if (!competitionId || !eventId || !participantId) {
+        showAlert('请选择比赛、项目和选手', 'error'); return;
+    }
+    
+    var { data: ceData, error: ceError } = await dbClient
+        .from('competition_events')
+        .select('id')
+        .eq('competition_id', competitionId)
+        .eq('event_id', eventId)
+        .maybeSingle();
+    if (ceError) { showAlert('查询比赛项目失败：' + ceError.message, 'error'); return; }
+    
+    var ceId = ceData ? ceData.id : null;
+    if (!ceId) {
+        var { data: maxData } = await dbClient
+            .from('competition_events')
+            .select('event_number')
+            .eq('competition_id', competitionId)
+            .order('event_number', { ascending: false })
+            .limit(1);
+        var nextNum = (maxData && maxData.length > 0) ? maxData[0].event_number + 1 : 1;
+        var { data: newCe, error: insertError } = await dbClient
+            .from('competition_events')
+            .insert({ competition_id: competitionId, event_id: eventId, event_number: nextNum })
+            .select('id')
+            .single();
+        if (insertError) { showAlert('创建比赛项目关联失败：' + insertError.message, 'error'); return; }
+        ceId = newCe.id;
+    }
+    
+    var attemptNum = parseInt(document.getElementById('attempt-id').value) || 1;
+    var cubeType = document.getElementById('attempt-cube-type').value;
+    var solveTime = parseFloat(document.getElementById('attempt-time').value) || null;
+    var isDnf = document.getElementById('attempt-penalty').value === 'dnf';
+    var isPlusTwo = document.getElementById('attempt-penalty').value === '+2';
+    if (!isDnf && solveTime === null) { showAlert('请输入复原时间或勾选 DNF', 'error'); return; }
+    
+    var attemptData = {
+        competition_event_id: ceId,
+        participant_id: participantId,
+        attempt_number: attemptNum,
+        solve_time: isDnf ? null : solveTime,
+        cube_type: cubeType,
+        is_dnf: isDnf,
+        is_plus_two: isPlusTwo,
+        notes: ''
+    };
+    
+    if (cubeType === 'smart') {
+        attemptData.move_count = parseInt(document.getElementById('attempt-move-count').value) || null;
+        attemptData.tps = parseFloat(document.getElementById('attempt-tps').value) || null;
+    } else {
+        attemptData.video_url = document.getElementById('attempt-video').value.trim();
+    }
+    
+    var { error: insertError } = await dbClient.from('attempts').insert(attemptData);
+    if (insertError) { showAlert('提交成绩失败：' + insertError.message, 'error'); return; }
+    showAlert('✅ 成绩提交成功！', 'success');
+    loadRecentAttempts();
+    document.getElementById('attempt-time').value = '';
+    if (cubeType === 'smart') {
+        document.getElementById('attempt-move-count').value = '';
+        document.getElementById('attempt-tps').value = '';
+    } else {
+        document.getElementById('attempt-video').value = '';
+    }
+}
