@@ -272,6 +272,15 @@
             margin: 15px 0;
         }
 
+        /* 项目管理：左列定宽，右列撑满 */
+        #tab-events .grid {
+            grid-template-columns: 460px 1fr;
+        }
+        #tab-events .table-responsive {
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
         /* Tabulator 紧凑样式（桌面端）*/
         .tabulator .tabulator-cell { padding: 5px 8px; }
         .tabulator .tabulator-header .tabulator-col { padding: 6px 8px; }
@@ -383,6 +392,7 @@
                 <h2>🎯 项目管理</h2>
                 <div class="grid">
                     <div>
+                                            <div>
                         <h3>添加项目</h3>
                         <div class="form-group">
                             <label>父项目（可选）</label>
@@ -421,12 +431,9 @@
                             <input type="number" id="event-threshold" step="0.001" placeholder="如：10.000（SUB-10）" />
                         </div>
                         <button class="btn" onclick="addEvent()">➕ 添加项目</button>
-                    </div>
-                    <div>
-                        <h3>项目列表</h3>
-                        <div class="table-responsive"><div id="events-table"></div></div>
-                        <hr style="margin: 24px 0; border: none; border-top: 1px solid #e9ecef;">
-                        <h3>⚙️ 配置项目参数</h3>
+
+                    <hr style="margin: 20px 0; border: none; border-top: 1px solid #e9ecef;">
+                    <h3>⚙️ 配置项目参数</h3>
                         <p style="color: #6c757d; margin-bottom: 15px; font-size: 14px;">
                             选择项目后可自定义其参数（如：是否记录步数、惩罚类型、尝试编号标签等）
                         </p>
@@ -436,8 +443,7 @@
                                 <option value="">-- 请选择项目 --</option>
                             </select>
                         </div>
-                        <!-- 表单式配置界面（替代 raw JSON 编辑） -->
-                        <div class="form-group">
+                        <div class="form-group" id="config-panel-start">
                             <label>⚙️ 项目配置（表单模式）</label>
                             <div id="config-form-wrapper" style="border:1px solid #dee2e6; border-radius:10px; padding:16px; background:#fafbfc; max-height:50vh; overflow-y:auto;">
                                 
@@ -478,10 +484,16 @@
                         <button class="btn" onclick="saveConfigFromForm()">💾 保存配置</button>
                         <button class="btn btn-success" onclick="onLoadDefaultConfigToForm()" style="margin-left: 10px;">📋 加载默认配置</button>
                     </div>
+                    </div>
+                    <div>
+                        <h3>项目列表</h3>
+                        <div class="table-responsive"><div id="events-table"></div></div>
+                        <hr style="margin: 24px 0; border: none; border-top: 1px solid #e9ecef;">
+                    </div>
                 </div>
             </div>
             
-            <!-- 选手管理 -->
+            <!-- 选手管理 --><!-- 选手管理 -->
             <div id="tab-participants" class="tab-content">
                 <h2>👤 选手管理</h2>
                 <div class="grid">
@@ -823,7 +835,8 @@
             
             eventsTable = new Tabulator('#events-table', {
                 data: data,
-                layout: 'fitColumns',
+                layout: 'fitDataFill',
+                maxHeight: 160,
                 rowHeight: 26,
                 headerHeight: 28,
                 columns: [
@@ -837,11 +850,13 @@
                                 return '  ↳ ' + cell.getValue();
                             }
                             return cell.getValue();
-                        }
+                        },
+                        width: 110
                     },
                     {
                         title: '项目名称',
                         field: 'event_name',
+                        width: 160,
                         formatter: function(cell) {
                             var row = cell.getRow().getData();
                             if (row.parent_event_id) {
@@ -1712,7 +1727,8 @@
             if (eventsTable) eventsTable.destroy();
             eventsTable = new Tabulator('#events-table', {
                 data: result,
-                layout: 'fitColumns',
+                layout: 'fitDataFill',
+                maxHeight: 160,
                 rowHeight: 26,
                 headerHeight: 28,
                 columns: [
@@ -1722,7 +1738,7 @@
                                (d._indent > 0 ? '  ↳ ' : '') + 
                                d.event_code + '</span>';
                     }},
-                    { title: '项目名称', field: 'event_name' },
+                    { title: '项目名称', field: 'event_name', width: 160 },
                     { title: '父项目', field: '_parent' },
                     { title: '算法', formatter: function(cell) {
                         var d = cell.getRow().getData();
@@ -2095,5 +2111,27 @@
     };
 
 </script>
+    <script>
+    // 页面加载后把配置面板从右列移到左列
+    document.addEventListener('DOMContentLoaded', function() {
+        var panel = document.getElementById('config-panel-start');
+        if (!panel) return;
+        // 找到项目管理 tab 的 grid 左列（第一个子 div）
+        var grid = document.querySelector('#tab-events .grid');
+        if (!grid) return;
+        var leftCol = grid.children[0];
+        if (!leftCol) return;
+        // 在添加项目按钮后插入分隔线和配置面板
+        var btn = leftCol.querySelector('.btn[onclick*="addEvent"]');
+        if (btn) {
+            var hr = document.createElement('hr');
+            hr.style.margin = '20px 0';
+            hr.style.border = 'none';
+            hr.style.borderTop = '1px solid #e9ecef';
+            btn.insertAdjacentElement('afterend', hr);
+            hr.insertAdjacentElement('afterend', panel);
+        }
+    });
+    </script>
 </body>
 </html>
