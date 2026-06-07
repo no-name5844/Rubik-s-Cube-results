@@ -271,6 +271,11 @@
             -webkit-overflow-scrolling: touch;
             margin: 15px 0;
         }
+
+        /* Tabulator 紧凑样式（桌面端）*/
+        .tabulator .tabulator-cell { padding: 5px 8px; }
+        .tabulator .tabulator-header .tabulator-col { padding: 6px 8px; }
+        .tabulator .tabulator-tableHolder { overflow-y: auto; }
         
         /* 超小屏幕下的表格优化 */
         @media (max-width: 767px) {
@@ -295,6 +300,7 @@
             .btn { display: none; }
         }
     </style>
+    <script src="event-config.js"></script>
 </head>
 <body>
     <div class="container">
@@ -426,26 +432,51 @@
                         </p>
                         <div class="form-group">
                             <label>选择项目</label>
-                            <select id="config-event-select" onchange="loadEventConfig()">
+                            <select id="config-event-select" onchange="loadEventConfigToForm()">
                                 <option value="">-- 请选择项目 --</option>
                             </select>
                         </div>
+                        <!-- 表单式配置界面（替代 raw JSON 编辑） -->
                         <div class="form-group">
-                            <label>项目配置 (JSON 格式)</label>
-                            <textarea id="event-config-json" rows="12" style="font-family: 'Courier New', monospace; font-size: 13px;" placeholder='{
-  "supports_smart_cube": true,
-  "record_steps": true,
-  "record_tps": true,
-  "penalty_types": ["none", "+2", "DNF"],
-  "attempt_id_label": "尝试编号",
-  "max_attempts": 5
-}'></textarea>
-                            <small style="color: #6c757d; margin-top: 5px; display: block;">
-                                高级用法：可添加任意自定义字段，系统会自动读取并应用
-                            </small>
+                            <label>⚙️ 项目配置（表单模式）</label>
+                            <div id="config-form-wrapper" style="border:1px solid #dee2e6; border-radius:10px; padding:16px; background:#fafbfc; max-height:50vh; overflow-y:auto;">
+                                
+                                <!-- 模板选择 -->
+                                <div style="background:#e8f5e9; border-radius:8px; padding:14px; margin-bottom:18px;">
+                                    <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">📋 从模板快速填充</div>
+                                    <select id="config-template-select" onchange="onConfigTemplateSelected()"
+                                        style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid #a5d6a7; font-size:14px;">
+                                        <option value="">-- 选择模板（自动填充下方表单）--</option>
+                                    </select>
+                                    <div id="template-desc" style="font-size:12px; color:#555; margin-top:6px;"></div>
+                                </div>
+
+                                <!-- event_config 表单字段 -->
+                                <div id="event-config-fields"></div>
+
+                                <hr style="margin:18px 0; border:none; border-top:1px solid #ddd;">
+
+                                <!-- algorithm_config 表单 -->
+                                <div id="algorithm-config-fields" style="background:#fff3e0; border-radius:8px; padding:14px;">
+                                    <div style="font-weight:600; color:#e65100; margin-bottom:10px;">🧮 算法配置（algorithm_config）</div>
+                                    <div id="algo-config-fields-inner"></div>
+                                </div>
+
+                                <div style="margin-top:14px; text-align:right;">
+                                    <button class="btn btn-success" onclick="onExportConfigJSON()" style="padding:8px 18px; font-size:13px; margin-right:8px;">📤 导出 JSON</button>
+                                    <button class="btn" onclick="onImportConfigJSON()" style="padding:8px 18px; font-size:13px;">📥 导入 JSON</button>
+                                </div>
+                            </div>
                         </div>
-                        <button class="btn" onclick="saveEventConfig()">💾 保存配置</button>
-                        <button class="btn btn-success" onclick="loadDefaultConfig()" style="margin-left: 10px;">📋 加载默认配置</button>
+
+                        <!-- 隐藏的 JSON 预览（高级用户） -->
+                        <details style="margin-top:10px;">
+                            <summary style="cursor:pointer; color:#667eea; font-size:13px;">🔍 查看 / 编辑原始 JSON（高级）</summary>
+                            <textarea id="event-config-json" rows="10" style="width:100%; margin-top:8px; font-family:'Courier New',monospace; font-size:12px;"
+                                placeholder="配置 JSON 将自动同步到此处"></textarea>
+                        </details>
+                        <button class="btn" onclick="saveConfigFromForm()">💾 保存配置</button>
+                        <button class="btn btn-success" onclick="onLoadDefaultConfigToForm()" style="margin-left: 10px;">📋 加载默认配置</button>
                     </div>
                 </div>
             </div>
@@ -681,6 +712,8 @@
             competitionsTable = new Tabulator('#competitions-table', {
                 data: data,
                 layout: 'fitColumns',
+                rowHeight: 26,
+                headerHeight: 28,
                 columns: [
                     { title: '编号', field: 'competition_number', width: 140 },
                     { title: '名称', field: 'name', minWidth: 150 },
@@ -791,12 +824,13 @@
             eventsTable = new Tabulator('#events-table', {
                 data: data,
                 layout: 'fitColumns',
+                rowHeight: 26,
+                headerHeight: 28,
                 columns: [
-                    { 
-                        title: '项目代码', 
-                        field: 'event_code', 
-                        width: 120,
-                        // 子项目缩进显示
+                    {
+                        title: '项目代码',
+                        field: 'event_code',
+                        width: 110,
                         formatter: function(cell) {
                             var row = cell.getRow().getData();
                             if (row.parent_event_id) {
@@ -805,35 +839,34 @@
                             return cell.getValue();
                         }
                     },
-                    { 
-                        title: '项目名称', 
+                    {
+                        title: '项目名称',
                         field: 'event_name',
-                        // 子项目用不同样式
                         formatter: function(cell) {
                             var row = cell.getRow().getData();
                             if (row.parent_event_id) {
-                                return '<span style="color: #667eea; font-size: 0.95em;">' + cell.getValue() + '</span>';
+                                return '<span style="color: #667eea;">' + cell.getValue() + '</span>';
                             }
                             return '<strong>' + cell.getValue() + '</strong>';
                         }
                     },
-                    { 
-                        title: '父项目', 
+                    {
+                        title: '父项目',
                         field: 'parent',
-                        width: 150,
+                        width: 140,
                         formatter: function(cell) {
                             var parent = cell.getValue();
                             if (parent) {
                                 return parent.event_code + ' - ' + parent.event_name;
                             }
-                            return '<span style="color: #999;">顶级项目</span>';
+                            return '<span style="color:#999;font-size:12px;">顶级</span>';
                         }
                     },
-                    { title: '描述', field: 'description' },
-                    { 
-                        title: '算法类型', 
+                    { title: '描述', field: 'description', width: 160 },
+                    {
+                        title: '算法',
                         field: 'algorithm_config',
-                        width: 100,
+                        width: 80,
                         formatter: function(cell) {
                             var config = cell.getValue();
                             if (config && config.algorithm_type) {
@@ -920,6 +953,8 @@
             participantsTable = new Tabulator('#participants-table', {
                 data: data,
                 layout: 'fitColumns',
+                rowHeight: 26,
+                headerHeight: 28,
                 columns: [
                     { title: '名称', field: 'name' },
                     { title: 'WCA ID', field: 'wca_id' },
@@ -1057,6 +1092,8 @@
             attemptsTable = new Tabulator('#attempts-table', {
                 data: data,
                 layout: 'fitColumns',
+                rowHeight: 26,
+                headerHeight: 28,
                 columns: [
                     { title: '选手', field: 'participants.name' },
                     { title: '项目', field: 'competition_events.events.event_name' },
@@ -1102,6 +1139,8 @@
             viewTable = new Tabulator('#view-table', {
                 data: data,
                 layout: 'fitColumns',
+                rowHeight: 26,
+                headerHeight: 28,
                 columns: [
                     { title: '选手', field: 'participants.name' },
                     { title: '次数', field: 'attempt_number', width: 80 },
@@ -1674,6 +1713,8 @@
             eventsTable = new Tabulator('#events-table', {
                 data: result,
                 layout: 'fitColumns',
+                rowHeight: 26,
+                headerHeight: 28,
                 columns: [
                     { title: '项目代码', field: 'event_code', formatter: function(cell) {
                         var d = cell.getRow().getData();
@@ -1701,6 +1742,358 @@
                 document.getElementById('supabaseKey').value = key;
             }
         });
-    </script>
+    
+
+    /**
+     * 加载默认配置到表单
+     */
+    function onLoadDefaultConfigToForm() {
+        // 使用 3x3 单次模板作为「默认」起点
+        var t = EventConfig.templates['3x3_single'];
+        if (!t) {
+            // fallback：用 schema 默认值
+            var ecfg = {};
+            for (var k in EventConfig.schema) {
+                ecfg[k] = EventConfig.schema[k].default;
+            }
+            renderEventConfigForm(ecfg);
+            renderAlgoConfigForm({algorithm_type:'single', is_lower_better:true});
+            showAlert('已加载默认配置（schema 默认值）', 'info');
+            return;
+        }
+        renderEventConfigForm(t.event_config);
+        renderAlgoConfigForm(t.algorithm_config);
+        syncConfigFormToJSON();
+        showAlert('已加载默认配置模板（三阶单次）', 'info');
+    }
+
+
+
+    // ======================== 配置表单渲染逻辑 ========================
+
+    // 字段分类
+    var CONFIG_CATEGORIES = [
+        {key:'recording',  label:'📝 记录选项',  fields:['supports_smart_cube','record_steps','record_tps','record_video','record_algorithm']},
+        {key:'attempt',     label:'🔢 尝试编号',    fields:['attempt_id_type','attempt_id_label','max_attempts','best_of']},
+        {key:'penalty',     label:'⚠️ 惩罚规则',    fields:['allow_plus_two','allow_dnf','penalty_types']},
+        {key:'rules',       label:'📏 比赛规则',    fields:['use_wca_rules','timer_precision','inspection_time','cumulative_time']},
+        {key:'display',     label:'🖥️ 显示设置',    fields:['sort_order','show_in_leaderboard','is_official_wca']}
+    ];
+
+    // 渲染 event_config 表单
+    function renderEventConfigForm(val) {
+        val = val || {};
+        var html = '';
+        CONFIG_CATEGORIES.forEach(function(cat) {
+            html += '<fieldset style="border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:16px;">';
+            html += '<legend style="font-weight:600;color:#444;padding:0 8px;">' + cat.label + '</legend>';
+            cat.fields.forEach(function(field) {
+                var def = EventConfig.schema[field];
+                if (!def) return;
+                var current = val[field] !== undefined ? val[field] : def.default;
+                html += renderConfigField(field, def, current, 'ecfg_');
+            });
+            html += '</fieldset>';
+        });
+        var wrapper = document.getElementById('event-config-fields');
+        if (wrapper) wrapper.innerHTML = html;
+        if (wrapper) wrapper.querySelectorAll('input,select').forEach(function(el) {
+            el.addEventListener('change', syncConfigFormToJSON);
+            el.addEventListener('input', syncConfigFormToJSON);
+        });
+    }
+
+    // 渲染 algorithm_config 表单
+    function renderAlgoConfigForm(val) {
+        val = val || {};
+        var algoSchema = {
+            algorithm_type:     EventConfig.schema.algorithm_type,
+            window_size:        EventConfig.schema.window_size,
+            trim_count:         EventConfig.schema.trim_count,
+            is_lower_better:    EventConfig.schema.is_lower_better,
+            threshold:          EventConfig.schema.threshold,
+            inherit_from_parent: EventConfig.schema.inherit_from_parent
+        };
+        var html = '';
+        for (var field in algoSchema) {
+            var def = algoSchema[field];
+            var current = val[field] !== undefined ? val[field] : def.default;
+            html += renderConfigField(field, def, current, 'acfg_');
+        }
+        var inner = document.getElementById('algo-config-fields-inner');
+        if (inner) inner.innerHTML = html;
+        var atEl = document.getElementById('acfg_algorithm_type');
+        if (atEl) atEl.addEventListener('change', onAlgoTypeChange);
+        if (inner) inner.querySelectorAll('input,select').forEach(function(el) {
+            el.addEventListener('change', syncConfigFormToJSON);
+            el.addEventListener('input', syncConfigFormToJSON);
+        });
+        if (atEl) onAlgoTypeChange();
+        syncConfigFormToJSON();
+    }
+
+    // 渲染单个字段
+    function renderConfigField(field, def, current, prefix) {
+        var id = prefix + field;
+        var html = '<div style="margin-bottom:12px;">';
+        html += '<label for="' + id + '" style="font-size:13px;font-weight:500;color:#333;cursor:pointer;">';
+        html += def.label + '</label>';
+        if (def.type === 'boolean') {
+            var checked = current ? 'checked' : '';
+            html += '<div style="margin-top:4px;"><label style="font-weight:400;cursor:pointer;font-size:12px;">';
+            html += '<input type="checkbox" id="' + id + '" ' + checked + ' style="margin-right:6px;">';
+            html += '<span style="color:#666;">' + (def.description||'') + '</span>';
+            html += '</label></div>';
+        } else if (def.type === 'enum') {
+            html += '<select id="' + id + '" style="width:100%;margin-top:4px;padding:6px 10px;border-radius:6px;border:1px solid #ccc;font-size:13px;">';
+            def.enum.forEach(function(opt) {
+                var selected = (current === opt) ? 'selected' : '';
+                var label = opt;
+                html += '<option value="' + opt + '" ' + selected + '>' + label + '</option>';
+            });
+            html += '</select>';
+            if (def.description) html += '<div style="font-size:11px;color:#888;margin-top:3px;">' + def.description + '</div>';
+        } else if (def.type === 'number') {
+            var valStr = (current === null || current === undefined) ? '' : String(current);
+            html += '<input type="number" id="' + id + '" value="' + valStr + '" style="width:100%;margin-top:4px;padding:6px 10px;border-radius:6px;border:1px solid #ccc;font-size:13px;">';
+            if (def.description) html += '<div style="font-size:11px;color:#888;margin-top:3px;">' + def.description + '</div>';
+        } else {
+            var valStr2 = Array.isArray(current) ? current.join(', ') : (current || '');
+            html += '<input type="text" id="' + id + '" value="' + escapeHtml(String(valStr2)) + '" style="width:100%;margin-top:4px;padding:6px 10px;border-radius:6px;border:1px solid #ccc;font-size:13px;">';
+            if (def.description) html += '<div style="font-size:11px;color:#888;margin-top:3px;">' + def.description + '</div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // 算法类型切换显示
+    function onAlgoTypeChange() {
+        var t = document.getElementById('acfg_algorithm_type');
+        if (!t) return;
+        var v = t.value;
+        var showWindow  = (v === 'average' || v === 'mean');
+        var showTrim    = (v === 'average');
+        var showThresh  = (v === 'sub');
+        var elW = document.getElementById('acfg_window_size');
+        var elT = document.getElementById('acfg_trim_count');
+        var elTh = document.getElementById('acfg_threshold');
+        if (elW) elW.closest('div').style.display = showWindow ? '' : 'none';
+        if (elT) elT.closest('div').style.display = showTrim ? '' : 'none';
+        if (elTh) elTh.closest('div').style.display = showThresh ? '' : 'none';
+    }
+
+    // 从表单读取 event_config
+    function readEventConfigFromForm() {
+        var obj = {};
+        CONFIG_CATEGORIES.forEach(function(cat) {
+            cat.fields.forEach(function(field) {
+                var def = EventConfig.schema[field];
+                if (!def) return;
+                var el = document.getElementById('ecfg_' + field);
+                if (!el) return;
+                if (def.type === 'boolean') {
+                    obj[field] = el.checked;
+                } else if (def.type === 'enum') {
+                    obj[field] = el.value;
+                } else if (def.type === 'number') {
+                    var v = el.value.trim();
+                    obj[field] = v === '' ? null : Number(v);
+                } else if (def.type === 'array') {
+                    obj[field] = el.value.split(',').map(function(s){return s.trim()}).filter(Boolean);
+                } else {
+                    obj[field] = el.value;
+                }
+            });
+        });
+        return obj;
+    }
+
+    // 从表单读取 algorithm_config
+    function readAlgoConfigFromForm() {
+        var algoSchema = {
+            algorithm_type:EventConfig.schema.algorithm_type,
+            window_size:EventConfig.schema.window_size,
+            trim_count:EventConfig.schema.trim_count,
+            is_lower_better:EventConfig.schema.is_lower_better,
+            threshold:EventConfig.schema.threshold,
+            inherit_from_parent:EventConfig.schema.inherit_from_parent
+        };
+        var obj = {};
+        for (var field in algoSchema) {
+            var def = algoSchema[field];
+            var el = document.getElementById('acfg_' + field);
+            if (!el) continue;
+            if (def.type === 'boolean') {
+                obj[field] = el.checked;
+            } else if (def.type === 'enum') {
+                obj[field] = el.value;
+            } else if (def.type === 'number') {
+                var v = el.value.trim();
+                obj[field] = v === '' ? null : Number(v);
+            } else {
+                obj[field] = el.value;
+            }
+        }
+        return obj;
+    }
+
+    // 同步表单数据到隐藏 textarea
+    function syncConfigFormToJSON() {
+        var ecfg = readEventConfigFromForm();
+        var acfg = readAlgoConfigFromForm();
+        // 只保留非默认值的字段（精简存储）
+        var compactE = {};
+        for (var k in ecfg) {
+            if (ecfg.hasOwnProperty(k) && ecfg[k] !== EventConfig.schema[k].default) compactE[k] = ecfg[k];
+        }
+        var algoSchema2 = {
+            algorithm_type:EventConfig.schema.algorithm_type,
+            window_size:EventConfig.schema.window_size,
+            trim_count:EventConfig.schema.trim_count,
+            is_lower_better:EventConfig.schema.is_lower_better,
+            threshold:EventConfig.schema.threshold,
+            inherit_from_parent:EventConfig.schema.inherit_from_parent
+        };
+        var compactA = {};
+        for (var k2 in acfg) {
+            if (acfg.hasOwnProperty(k2) && acfg[k2] !== algoSchema2[k2].default) compactA[k2] = acfg[k2];
+        }
+        var full = {event_config:compactE, algorithm_config:compactA};
+        var ta = document.getElementById('event-config-json');
+        if (ta) ta.value = JSON.stringify(full, null, 2);
+    }
+
+    // 模板选择
+    function onConfigTemplateSelected() {
+        var sel = document.getElementById('config-template-select');
+        var key = sel.value;
+        if (!key) { document.getElementById('template-desc').textContent = ''; return; }
+        var t = EventConfig.templates[key];
+        if (!t) return;
+        document.getElementById('template-desc').textContent = t.description;
+        renderEventConfigForm(t.event_config);
+        renderAlgoConfigForm(t.algorithm_config);
+        syncConfigFormToJSON();
+        showAlert('已加载模板：「' + t.name + '」', 'success');
+    }
+
+    // 导出 JSON
+    function onExportConfigJSON() {
+        syncConfigFormToJSON();
+        var ta = document.getElementById('event-config-json');
+        if (ta) {
+            ta.closest('details').open = true;
+            ta.focus();
+            showAlert('已导出 JSON 到下方文本框，可复制使用', 'info');
+        }
+    }
+
+    // 从 JSON 导入
+    function onImportConfigJSON() {
+        var ta = document.getElementById('event-config-json');
+        if (!ta || !ta.value.trim()) { showAlert('请先在下方文本框粘贴 JSON 配置', 'error'); return; }
+        try {
+            var obj = JSON.parse(ta.value.trim());
+            var ecfg = EventConfig.fillDefaults(obj.event_config || {});
+            var acfg = EventConfig.fillDefaults(obj.algorithm_config || {});
+            renderEventConfigForm(ecfg);
+            renderAlgoConfigForm(acfg);
+            showAlert('已从 JSON 导入配置并渲染到表单', 'success');
+        } catch(e) {
+            showAlert('JSON 解析失败：' + e.message, 'error');
+        }
+    }
+
+    // 加载项目配置到表单
+    async function loadEventConfigToForm() {
+        var eventId = document.getElementById('config-event-select').value;
+        if (!eventId) {
+            var w = document.getElementById('event-config-fields');
+            if (w) w.innerHTML = '<div style="color:#999;font-size:13px;">请先选择项目</div>';
+            var a = document.getElementById('algo-config-fields-inner');
+            if (a) a.innerHTML = '';
+            return;
+        }
+        var { data, error } = await supabase
+            .from('events')
+            .select('event_config, algorithm_config, event_name, event_code')
+            .eq('id', eventId)
+            .single();
+        if (error) { showAlert('加载失败：' + error.message, 'error'); return; }
+        var ecfg = EventConfig.fillDefaults(data.event_config || {});
+        var acfg = EventConfig.fillDefaults(data.algorithm_config || {});
+        renderEventConfigForm(ecfg);
+        renderAlgoConfigForm(acfg);
+        syncConfigFormToJSON();
+        showAlert('已加载「' + data.event_code + ' - ' + data.event_name + '」的配置', 'success');
+    }
+
+    // 保存表单配置
+    async function saveConfigFromForm() {
+        var eventId = document.getElementById('config-event-select').value;
+        if (!eventId) { showAlert('请先选择项目', 'error'); return; }
+        syncConfigFormToJSON();
+        var ta = document.getElementById('event-config-json');
+        var full;
+        try {
+            full = JSON.parse(ta.value.trim() || '{}');
+        } catch(e) {
+            showAlert('JSON 格式错误：' + e.message, 'error'); return;
+        }
+        var { error } = await supabase
+            .from('events')
+            .update({
+                event_config: full.event_config || {},
+                algorithm_config: full.algorithm_config || {}
+            })
+            .eq('id', eventId);
+        if (error) { showAlert('保存失败：' + error.message, 'error'); return; }
+        showAlert('配置保存成功！', 'success');
+    }
+
+    // 加载默认配置到表单
+    function onLoadDefaultConfigToForm() {
+        var t = EventConfig.templates['3x3_single'];
+        if (!t) {
+            var ecfg = {};
+            for (var k in EventConfig.schema) {
+                if (EventConfig.schema.hasOwnProperty(k)) ecfg[k] = EventConfig.schema[k].default;
+            }
+            renderEventConfigForm(ecfg);
+            renderAlgoConfigForm({algorithm_type:'single', is_lower_better:true});
+            showAlert('已加载默认配置（schema 默认值）', 'info');
+            return;
+        }
+        renderEventConfigForm(t.event_config);
+        renderAlgoConfigForm(t.algorithm_config);
+        syncConfigFormToJSON();
+        showAlert('已加载默认配置模板（三阶单次）', 'info');
+    }
+
+    // 初始化模板下拉框
+    function initConfigTemplateSelect() {
+        var sel = document.getElementById('config-template-select');
+        if (!sel || sel.options.length > 1) return;
+        var list = EventConfig.getTemplateList();
+        list.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.key;
+            opt.textContent = (t.icon||'📌') + ' ' + t.name;
+            sel.appendChild(opt);
+        });
+    }
+
+    // 在页面初始化时调用
+    var _origInit = window.onload || function(){};
+    window.onload = function() {
+        _origInit();
+        initConfigTemplateSelect();
+    };
+
+</script>
 </body>
 </html>
