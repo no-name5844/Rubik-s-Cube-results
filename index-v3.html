@@ -1184,8 +1184,36 @@
                 document.getElementById('mle-prediction').innerHTML = '请选择选手和项目';
                 return;
             }
-            // 1. 获取该选手在该项目的所有有效成绩
-            var { data: attempts, error } = await dbClient
+            
+            // 1. 调用数据库的 calculate_statistic() 函数
+            var { data: statsData, error: statsError } = await dbClient
+                .rpc('calculate_statistic', {
+                    participant_id: participantId,
+                    event_id: eventId,
+                    statistic_type: 'all'
+                });
+            
+            if (statsError) {
+                console.error('调用 calculate_statistic() 失败:', statsError);
+                // 降级到浏览器端计算
+                showAlert('数据库函数调用失败，使用浏览器端计算', 'info');
+                return loadStatsFallback(participantId, eventId);
+            }
+            
+            // 2. 显示统计卡片
+            if (statsData && statsData.length > 0) {
+                var stats = statsData[0];
+                var cardsHtml = 
+                    '<div class="stat-card"><h3>单次最佳</h3><div class="value">' + (stats.single_best ? stats.single_best.toFixed(3) : '-') + '</div></div>' +
+                    '<div class="stat-card"><h3>平均最佳</h3><div class="value">' + (stats.average_best ? stats.average_best.toFixed(3) : '-') + '</div></div>' +
+                    '<div class="stat-card"><h3>AO5 最佳</h3><div class="value">' + (stats.ao5_best ? stats.ao5_best.toFixed(3) : '-') + '</div></div>' +
+                    '<div class="stat-card"><h3>AO12 最佳</h3><div class="value">' + (stats.ao12_best ? stats.ao12_best.toFixed(3) : '-') + '</div></div>' +
+                    '<div class="stat-card"><h3>总次数</h3><div class="value">' + (stats.total_attempts || 0) + '</div></div>';
+                document.getElementById('stats-cards').innerHTML = cardsHtml;
+            }
+            
+            // 3. 获取成绩数据用于 Gamma 分布拟合
+            var { data: attempts, error: attemptsError } = await dbClient
                 .from('attempts')
                 .select('*, competition_events!inner(*)')
                 .eq('participant_id', participantId)
@@ -1193,66 +1221,43 @@
                 .eq('is_dnf', false)
                 .not('solve_time', 'is', null)
                 .order('created_at');
-            if (error) { showAlert('加载成绩失败：' + error.message, 'error'); return; }
-            if (!attempts || attempts.length === 0) {
+            
+            if (attemptsError || !attempts || attempts.length === 0) {
                 document.getElementById('mle-prediction').innerHTML = '暂无有效成绩';
                 return;
             }
-            // 2. 计算统计数据
+            
             var times = attempts.map(a => a.solve_time);
-            var single = Math.min(...times);
-            var currentAvg = times.reduce((a, b) => a + b, 0) / times.length;
-            // 计算 AO5（滑动窗口）
-            var ao5List = [];
-            for (var i = 4; i < times.length; i++) {
-                var window = times.slice(i-4, i+1);
-                var sorted = window.slice().sort((a,b) => a - b);
-                var avg = (sorted[1] + sorted[2] + sorted[3]) / 3;
-                ao5List.push(avg);
-            }
-            var bestAo5 = ao5List.length > 0 ? Math.min(...ao5List) : null;
-            // 计算 AO12
-            var ao12List = [];
-            for (var i = 11; i < times.length; i++) {
-                var window = times.slice(i-11, i+1);
-                var sorted = window.slice().sort((a,b) => a - b);
-                var avg = (sorted[1] + sorted[2] + sorted[3] + sorted[4] + sorted[5] + sorted[6] + sorted[7] + sorted[8] + sorted[9] + sorted[10]) / 10;
-                ao12List.push(avg);
-            }
-            var bestAo12 = ao12List.length > 0 ? Math.min(...ao12List) : null;
-            // 3. 显示统计卡片
-            var cardsHtml = 
-                '<div class="stat-card"><h3>单次最佳</h3><div class="value">' + single.toFixed(3) + '</div></div>' +
-                '<div class="stat-card"><h3>当前平均</h3><div class="value">' + currentAvg.toFixed(3) + '</div></div>' +
-                (bestAo5 ? '<div class="stat-card"><h3>最佳 AO5</h3><div class="value">' + bestAo5.toFixed(3) + '</div></div>' : '') +
-                (bestAo12 ? '<div class="stat-card"><h3>最佳 AO12</h3><div class="value">' + bestAo12.toFixed(3) + '</div></div>' : '') +
-                '<div class="stat-card"><h3>总次数</h3><div class="value">' + times.length + '</div></div>';
-            document.getElementById('stats-cards').innerHTML = cardsHtml;
-            // 4. Gamma 分布 MLE 拟合
+            
+            // 4. Gamma 分布 MLE 拟合（仍在前端完成）
             var mle = fitGammaMLE(times);
             if (!mle) {
                 document.getElementById('mle-prediction').innerHTML = '成绩数据不足，无法拟合';
                 return;
             }
+            
             var alpha = mle.alpha;
             var beta = mle.beta;
-            var mode = (alpha > 1) ? (alpha - 1) / beta : 0;  // 众数 = 真实水平
+            var mode = (alpha > 1) ? (alpha - 1) / beta : 0;
             var mean = alpha / beta;
             var variance = alpha / (beta * beta);
+            
             // 5. 显示 MLE 预测
             var predictionHtml = 
                 '<h4>📊 Gamma 分布参数（MLE 估计）</h4>' +
-                '<p><strong>α（形状）＝</strong> ' + alpha.toFixed(3) + '</p>' +
-                '<p><strong>β（尺度）＝</strong> ' + beta.toFixed(3) + '</p>' +
-                '<p><strong>众数（真实水平）＝</strong> ' + mode.toFixed(3) + ' 秒</p>' +
-                '<p><strong>均值＝</strong> ' + mean.toFixed(3) + ' 秒</p>' +
-                '<p><strong>标准差＝</strong> ' + Math.sqrt(variance).toFixed(3) + ' 秒</p>' +
+                '<p><strong>α（形状）</strong>：' + alpha.toFixed(3) + '</p>' +
+                '<p><strong>β（尺度）</strong>：' + beta.toFixed(3) + '</p>' +
+                '<p><strong>众数（真实水平）</strong>：' + mode.toFixed(3) + ' 秒</p>' +
+                '<p><strong>均值</strong>：' + mean.toFixed(3) + ' 秒</p>' +
+                '<p><strong>标准差</strong>：' + Math.sqrt(variance).toFixed(3) + ' 秒</p>' +
                 '<h4>🎯 预测</h4>' +
                 '<p>下次成绩 < 10 秒的概率：～ ' + (gammaCdf(10, alpha, beta) * 100).toFixed(1) + '%</p>' +
                 '<p>下次成绩在 ' + mode.toFixed(1) + ' ± 2 秒内的概率：～ ' + ((gammaCdf(mode+2, alpha, beta) - gammaCdf(Math.max(0, mode-2), alpha, beta)) * 100).toFixed(1) + '%</p>';
             document.getElementById('mle-prediction').innerHTML = predictionHtml;
+            
             // 6. 绘制 Gamma 分布图
             drawGammaChart(times, alpha, beta);
+            
             // 7. 保存 MLE 预测结果到数据库
             await dbClient.from('mle_predictions').upsert({
                 participant_id: participantId,
@@ -1265,6 +1270,84 @@
                 sample_size: times.length,
                 confidence_interval: JSON.stringify({ lower: mode - 2*Math.sqrt(variance), upper: mode + 2*Math.sqrt(variance) })
             }, { onConflict: 'participant_id,event_id' });
+        }
+        
+        // 降级函数：浏览器端计算（当数据库函数不可用时）
+        async function loadStatsFallback(participantId, eventId) {
+            // 这里放置原来的计算逻辑
+            var { data: attempts, error } = await dbClient
+                .from('attempts')
+                .select('*, competition_events!inner(*)')
+                .eq('participant_id', participantId)
+                .eq('competition_events.event_id', eventId)
+                .eq('is_dnf', false)
+                .not('solve_time', 'is', null)
+                .order('created_at');
+            
+            if (error || !attempts || attempts.length === 0) {
+                document.getElementById('mle-prediction').innerHTML = '暂无有效成绩';
+                return;
+            }
+            
+            var times = attempts.map(a => a.solve_time);
+            var single = Math.min(...times);
+            var currentAvg = times.reduce((a, b) => a + b, 0) / times.length;
+            
+            // 计算 AO5
+            var ao5List = [];
+            for (var i = 4; i < times.length; i++) {
+                var window = times.slice(i-4, i+1);
+                var sorted = window.slice().sort((a,b) => a - b);
+                var avg = (sorted[1] + sorted[2] + sorted[3]) / 3;
+                ao5List.push(avg);
+            }
+            var bestAo5 = ao5List.length > 0 ? Math.min(...ao5List) : null;
+            
+            // 计算 AO12
+            var ao12List = [];
+            for (var i = 11; i < times.length; i++) {
+                var window = times.slice(i-11, i+1);
+                var sorted = window.slice().sort((a,b) => a - b);
+                var avg = (sorted[1] + sorted[2] + sorted[3] + sorted[4] + sorted[5] + sorted[6] + sorted[7] + sorted[8] + sorted[9] + sorted[10]) / 10;
+                ao12List.push(avg);
+            }
+            var bestAo12 = ao12List.length > 0 ? Math.min(...ao12List) : null;
+            
+            // 显示统计卡片
+            var cardsHtml = 
+                '<div class="stat-card"><h3>单次最佳</h3><div class="value">' + single.toFixed(3) + '</div></div>' +
+                '<div class="stat-card"><h3>当前平均</h3><div class="value">' + currentAvg.toFixed(3) + '</div></div>' +
+                (bestAo5 ? '<div class="stat-card"><h3>最佳 AO5</h3><div class="value">' + bestAo5.toFixed(3) + '</div></div>' : '') +
+                (bestAo12 ? '<div class="stat-card"><h3>最佳 AO12</h3><div class="value">' + bestAo12.toFixed(3) + '</div></div>' : '') +
+                '<div class="stat-card"><h3>总次数</h3><div class="value">' + times.length + '</div></div>';
+            document.getElementById('stats-cards').innerHTML = cardsHtml;
+            
+            // Gamma 分布拟合（省略，与原函数相同）
+            var mle = fitGammaMLE(times);
+            if (!mle) {
+                document.getElementById('mle-prediction').innerHTML = '成绩数据不足，无法拟合';
+                return;
+            }
+            
+            var alpha = mle.alpha;
+            var beta = mle.beta;
+            var mode = (alpha > 1) ? (alpha - 1) / beta : 0;
+            var mean = alpha / beta;
+            var variance = alpha / (beta * beta);
+            
+            var predictionHtml = 
+                '<h4>📊 Gamma 分布参数（MLE 估计）</h4>' +
+                '<p><strong>α（形状）</strong>：' + alpha.toFixed(3) + '</p>' +
+                '<p><strong>β（尺度）</strong>：' + beta.toFixed(3) + '</p>' +
+                '<p><strong>众数（真实水平）</strong>：' + mode.toFixed(3) + ' 秒</p>' +
+                '<p><strong>均值</strong>：' + mean.toFixed(3) + ' 秒</p>' +
+                '<p><strong>标准差</strong>：' + Math.sqrt(variance).toFixed(3) + ' 秒</p>' +
+                '<h4>🎯 预测</h4>' +
+                '<p>下次成绩 < 10 秒的概率：～ ' + (gammaCdf(10, alpha, beta) * 100).toFixed(1) + '%</p>' +
+                '<p>下次成绩在 ' + mode.toFixed(1) + ' ± 2 秒内的概率：～ ' + ((gammaCdf(mode+2, alpha, beta) - gammaCdf(Math.max(0, mode-2), alpha, beta)) * 100).toFixed(1) + '%</p>';
+            document.getElementById('mle-prediction').innerHTML = predictionHtml;
+            
+            drawGammaChart(times, alpha, beta);
         }
         
         // ========== Gamma 分布 MLE 拟合 ==========
