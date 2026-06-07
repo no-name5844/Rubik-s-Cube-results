@@ -395,6 +395,33 @@
                     <div>
                         <h3>项目列表</h3>
                         <div class="table-responsive"><div id="events-table"></div></div>
+                        <hr style="margin: 24px 0; border: none; border-top: 1px solid #e9ecef;">
+                        <h3>⚙️ 配置项目参数</h3>
+                        <p style="color: #6c757d; margin-bottom: 15px; font-size: 14px;">
+                            选择项目后可自定义其参数（如：是否记录步数、惩罚类型、尝试编号标签等）
+                        </p>
+                        <div class="form-group">
+                            <label>选择项目</label>
+                            <select id="config-event-select" onchange="loadEventConfig()">
+                                <option value="">-- 请选择项目 --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>项目配置 (JSON 格式)</label>
+                            <textarea id="event-config-json" rows="12" style="font-family: 'Courier New', monospace; font-size: 13px;" placeholder='{
+  "supports_smart_cube": true,
+  "record_steps": true,
+  "record_tps": true,
+  "penalty_types": ["none", "+2", "DNF"],
+  "attempt_id_label": "尝试编号",
+  "max_attempts": 5
+}'></textarea>
+                            <small style="color: #6c757d; margin-top: 5px; display: block;">
+                                高级用法：可添加任意自定义字段，系统会自动读取并应用
+                            </small>
+                        </div>
+                        <button class="btn" onclick="saveEventConfig()">💾 保存配置</button>
+                        <button class="btn btn-success" onclick="loadDefaultConfig()" style="margin-left: 10px;">📋 加载默认配置</button>
                     </div>
                 </div>
             </div>
@@ -441,8 +468,8 @@
                             <select id="attempt-participant"></select>
                         </div>
                         <div class="form-group">
-                            <label>尝试次数</label>
-                            <input type="number" id="attempt-number" value="1" min="1" />
+                            <label>尝试编号</label>
+                            <input type="text" id="attempt-number" placeholder="如：1, A, Round1-1" />
                         </div>
                         <div class="form-group">
                             <label>魔方类型</label>
@@ -1252,10 +1279,88 @@
                 loadEventsForSelect('attempt-event'),
                 loadEventsForSelect('view-event'),
                 loadEventsForSelect('stats-event'),
-                loadEventsForSelect('config-event')
+                loadEventsForSelect('config-event-select')  // 修正：原来是 'config-event'
             ]);
         };
 
+        
+        // ========= 项目配置功能 =========
+        
+        // 加载项目配置
+        async function loadEventConfig() {
+            var eventId = document.getElementById('config-event-select').value;
+            if (!eventId) {
+                document.getElementById('event-config-json').value = '';
+                return;
+            }
+            
+            var { data, error } = await dbClient
+                .from('events')
+                .select('event_config, event_name, event_code')
+                .eq('id', eventId)
+                .single();
+            
+            if (error) {
+                showAlert('加载项目配置失败：' + error.message, 'error');
+                return;
+            }
+            
+            // 格式化显示 JSON
+            var config = data.event_config || {};
+            document.getElementById('event-config-json').value = JSON.stringify(config, null, 2);
+            
+            showAlert('已加载项目「' + data.event_code + ' - ' + data.event_name + '」的配置', 'success');
+        }
+        
+        // 保存项目配置
+        async function saveEventConfig() {
+            var eventId = document.getElementById('config-event-select').value;
+            if (!eventId) {
+                showAlert('请先选择项目', 'error');
+                return;
+            }
+            
+            // 验证 JSON 格式
+            var configStr = document.getElementById('event-config-json').value.trim();
+            var config;
+            try {
+                config = JSON.parse(configStr || '{}');
+            } catch (e) {
+                showAlert('JSON 格式错误：' + e.message, 'error');
+                return;
+            }
+            
+            // 保存到数据库
+            var { error } = await dbClient
+                .from('events')
+                .update({ event_config: config })
+                .eq('id', eventId);
+            
+            if (error) {
+                showAlert('保存失败：' + error.message, 'error');
+                return;
+            }
+            
+            showAlert('配置保存成功！', 'success');
+        }
+        
+        // 加载默认配置模板
+        function loadDefaultConfig() {
+            var defaultConfig = {
+                "supports_smart_cube": true,
+                "record_steps": true,
+                "record_tps": true,
+                "record_video": false,
+                "penalty_types": ["none", "+2", "DNF"],
+                "attempt_id_type": "number",
+                "attempt_id_label": "尝试编号",
+                "max_attempts": 5,
+                "best_of": 1
+            };
+            
+            document.getElementById('event-config-json').value = JSON.stringify(defaultConfig, null, 2);
+            showAlert('已加载默认配置模板，请修改后保存', 'info');
+        }
         
         // ========= 动态加载比赛项目（查看数据页） =========
         function loadCompetitionEventsForView() {

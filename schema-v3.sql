@@ -30,7 +30,7 @@ CREATE TABLE competitions (
 
 -- ============================================
 -- 2. 项目/魔方类型表 (events)
--- 高度可自定义，用户可添加任意项目
+-- 高度可自定义，用户可通过 event_config JSON 配置项目参数
 -- ============================================
 CREATE TABLE events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -38,8 +38,23 @@ CREATE TABLE events (
     event_name VARCHAR(100) NOT NULL,            -- 如 '三阶魔方'
     description TEXT,
     puzzle_type VARCHAR(50),                     -- 'cube', 'pyramid', 'other'
+    event_config JSONB DEFAULT '{}'::jsonb,     -- 项目自定义配置（见下方注释）
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+COMMENT ON COLUMN events.event_config IS '项目自定义配置（JSON格式）：
+{
+  "supports_smart_cube": true,     -- 是否支持智能魔方
+  "record_steps": true,             -- 是否记录步数
+  "record_tps": true,              -- 是否记录 TPS
+  "record_video": false,            -- 是否记录视频链接
+  "penalty_types": ["none", "+2", "DNF"],  -- 支持的惩罚类型
+  "attempt_id_type": "number",      -- 尝试编号类型："number" | "text" | "custom"
+  "attempt_id_label": "尝试编号",  -- 尝试编号的显示标签
+  "max_attempts": 5,               -- 最大尝试次数（可选）
+  "best_of": 1,                    -- 取最佳 N 次（如：三局两胜）
+  "custom_fields": []                -- 自定义字段列表（高级用法）
+}';
 
 -- 插入默认项目
 INSERT INTO events (event_code, event_name, description, puzzle_type) VALUES
@@ -84,12 +99,13 @@ CREATE TABLE participants (
 -- ============================================
 -- 5. 成绩记录表 (attempts)
 -- 关联到 competition_events（具体比赛的具体项目）
+-- attempt_number 改为 TEXT 类型，支持灵活的尝试编号
 -- ============================================
 CREATE TABLE attempts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     competition_event_id UUID REFERENCES competition_events(id) ON DELETE CASCADE,
     participant_id UUID REFERENCES participants(id) ON DELETE CASCADE,
-    attempt_number INTEGER NOT NULL,             -- 第几次尝试
+    attempt_number TEXT NOT NULL,                -- 尝试编号（文本类型，灵活标识）
     solve_time DECIMAL(10,3),                    -- 复原时间（秒），DNF时为NULL
     cube_type VARCHAR(20) NOT NULL CHECK (cube_type IN ('smart', 'non_smart')),
     scramble TEXT,                               -- 打乱公式
