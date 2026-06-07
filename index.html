@@ -272,11 +272,19 @@
             margin: 15px 0;
         }
 
-        /* 项目管理：左列定宽，右列撑满 */
-        #tab-events .grid {
+        /* 所有管理页面：左列固定宽，右列撑满 */
+        #tab-competitions .grid,
+        #tab-events .grid,
+        #tab-participants .grid,
+        #tab-attempts .grid,
+        #tab-stats .grid {
             grid-template-columns: 460px 1fr;
         }
-        #tab-events .table-responsive {
+        /* 项目列表高度限制 */
+        #tab-events .table-responsive,
+        #tab-competitions .table-responsive,
+        #tab-participants .table-responsive,
+        #tab-attempts .table-responsive {
             max-height: 160px;
             overflow-y: auto;
         }
@@ -1569,6 +1577,7 @@
                 loadEventsForSelect('attempt-event'),
                 loadEventsForSelect('view-event'),
                 loadEventsForSelect('stats-event'),
+                loadEventsForSelect('event-parent'),
                 loadEventsForSelect('config-event-select')  // 修正：原来是 'config-event'
             ]);
         };
