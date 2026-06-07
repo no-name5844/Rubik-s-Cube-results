@@ -773,17 +773,104 @@
         
         // 加载项目列表
         async function loadEvents() {
-            var { data, error } = await dbClient.from('events').select('*').order('event_code');
-            if (error) return;
+            // 查询时关联父项目信息
+            var { data, error } = await dbClient
+                .from('events')
+                .select('*, parent:parent_event_id(event_code, event_name)')
+                .order('parent_event_id', { ascending: true })
+                .order('sort_order', { ascending: true })
+                .order('event_code', { ascending: true });
+            
+            if (error) {
+                showAlert('加载项目失败：' + error.message, 'error');
+                return;
+            }
+            
             if (eventsTable) eventsTable.destroy();
+            
             eventsTable = new Tabulator('#events-table', {
                 data: data,
                 layout: 'fitColumns',
                 columns: [
-                    { title: '代码', field: 'event_code', width: 100 },
-                    { title: '名称', field: 'event_name' },
-                    { title: '描述', field: 'description' }
+                    { 
+                        title: '项目代码', 
+                        field: 'event_code', 
+                        width: 120,
+                        // 子项目缩进显示
+                        formatter: function(cell) {
+                            var row = cell.getRow().getData();
+                            if (row.parent_event_id) {
+                                return '  ↳ ' + cell.getValue();
+                            }
+                            return cell.getValue();
+                        }
+                    },
+                    { 
+                        title: '项目名称', 
+                        field: 'event_name',
+                        // 子项目用不同样式
+                        formatter: function(cell) {
+                            var row = cell.getRow().getData();
+                            if (row.parent_event_id) {
+                                return '<span style="color: #667eea; font-size: 0.95em;">' + cell.getValue() + '</span>';
+                            }
+                            return '<strong>' + cell.getValue() + '</strong>';
+                        }
+                    },
+                    { 
+                        title: '父项目', 
+                        field: 'parent',
+                        width: 150,
+                        formatter: function(cell) {
+                            var parent = cell.getValue();
+                            if (parent) {
+                                return parent.event_code + ' - ' + parent.event_name;
+                            }
+                            return '<span style="color: #999;">顶级项目</span>';
+                        }
+                    },
+                    { title: '描述', field: 'description' },
+                    { 
+                        title: '算法类型', 
+                        field: 'algorithm_config',
+                        width: 100,
+                        formatter: function(cell) {
+                            var config = cell.getValue();
+                            if (config && config.algorithm_type) {
+                                return config.algorithm_type;
+                            }
+                            return '-';
+                        }
+                    }
                 ]
+            });
+            
+            // 同时更新"项目配置"下拉框
+            loadEventsForConfigSelect();
+        }
+        
+        // 更新项目配置下拉框（包含层级信息）
+        async function loadEventsForConfigSelect() {
+            var { data, error } = await dbClient
+                .from('events')
+                .select('id, event_code, event_name, parent_event_id')
+                .order('parent_event_id', { ascending: true })
+                .order('sort_order', { ascending: true });
+            
+            if (error) return;
+            
+            var select = document.getElementById('config-event-select');
+            select.innerHTML = '<option value="">-- 请选择项目 --</option>';
+            
+            data.forEach(function(event) {
+                var option = document.createElement('option');
+                option.value = event.id;
+                if (event.parent_event_id) {
+                    option.textContent = '  ↳ ' + event.event_code + ' - ' + event.event_name;
+                } else {
+                    option.textContent = event.event_code + ' - ' + event.event_name;
+                }
+                select.appendChild(option);
             });
         }
         
